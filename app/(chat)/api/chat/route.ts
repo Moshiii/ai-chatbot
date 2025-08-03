@@ -49,12 +49,12 @@ export function getStreamContext() {
         waitUntil: after,
       });
     } catch (error: any) {
-      if (error.message.includes('REDIS_URL')) {
+      if (error.message.includes('REDIS_URL') || error.message.includes('Invalid URL')) {
         console.log(
-          ' > Resumable streams are disabled due to missing REDIS_URL',
+          ' > Resumable streams are disabled due to missing or invalid REDIS_URL',
         );
       } else {
-        console.error(error);
+        console.error('Error creating resumable stream context:', error);
       }
     }
   }
@@ -222,6 +222,9 @@ export async function POST(request: Request) {
     if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
+    
+    console.error('Unexpected error in chat route:', error);
+    return new ChatSDKError('bad_request:chat').toResponse();
   }
 }
 

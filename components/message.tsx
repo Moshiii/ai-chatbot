@@ -170,7 +170,7 @@ const PurePreviewMessage = ({
 
                 if (state === 'input-available') {
                   return (
-                    <div key={toolCallId} className="skeleton">
+                    <div key={`weather-input-${toolCallId}`} className="skeleton">
                       <Weather />
                     </div>
                   );
@@ -179,7 +179,7 @@ const PurePreviewMessage = ({
                 if (state === 'output-available') {
                   const { output } = part;
                   return (
-                    <div key={toolCallId}>
+                    <div key={`weather-output-${toolCallId}`}>
                       <Weather weatherAtLocation={output} />
                     </div>
                   );
@@ -192,7 +192,7 @@ const PurePreviewMessage = ({
                 if (state === 'input-available') {
                   const { input } = part;
                   return (
-                    <div key={toolCallId}>
+                    <div key={`create-doc-input-${toolCallId}`}>
                       <DocumentPreview isReadonly={isReadonly} args={input} />
                     </div>
                   );
@@ -204,7 +204,7 @@ const PurePreviewMessage = ({
                   if ('error' in output) {
                     return (
                       <div
-                        key={toolCallId}
+                        key={`create-doc-error-${toolCallId}`}
                         className="text-red-500 p-2 border rounded"
                       >
                         Error: {String(output.error)}
@@ -213,7 +213,7 @@ const PurePreviewMessage = ({
                   }
 
                   return (
-                    <div key={toolCallId}>
+                    <div key={`create-doc-output-${toolCallId}`}>
                       <DocumentPreview
                         isReadonly={isReadonly}
                         result={output}
@@ -230,7 +230,7 @@ const PurePreviewMessage = ({
                   const { input } = part;
 
                   return (
-                    <div key={toolCallId}>
+                    <div key={`update-doc-input-${toolCallId}`}>
                       <DocumentToolCall
                         type="update"
                         args={input}
@@ -246,7 +246,7 @@ const PurePreviewMessage = ({
                   if ('error' in output) {
                     return (
                       <div
-                        key={toolCallId}
+                        key={`update-doc-error-${toolCallId}`}
                         className="text-red-500 p-2 border rounded"
                       >
                         Error: {String(output.error)}
@@ -255,7 +255,7 @@ const PurePreviewMessage = ({
                   }
 
                   return (
-                    <div key={toolCallId}>
+                    <div key={`update-doc-output-${toolCallId}`}>
                       <DocumentToolResult
                         type="update"
                         result={output}
@@ -272,7 +272,7 @@ const PurePreviewMessage = ({
                 if (state === 'input-available') {
                   const { input } = part;
                   return (
-                    <div key={toolCallId}>
+                    <div key={`suggestions-input-${toolCallId}`}>
                       <DocumentToolCall
                         type="request-suggestions"
                         args={input}
@@ -288,7 +288,7 @@ const PurePreviewMessage = ({
                   if ('error' in output) {
                     return (
                       <div
-                        key={toolCallId}
+                        key={`suggestions-error-${toolCallId}`}
                         className="text-red-500 p-2 border rounded"
                       >
                         Error: {String(output.error)}
@@ -297,7 +297,7 @@ const PurePreviewMessage = ({
                   }
 
                   return (
-                    <div key={toolCallId}>
+                    <div key={`suggestions-output-${toolCallId}`}>
                       <DocumentToolResult
                         type="request-suggestions"
                         result={output}
