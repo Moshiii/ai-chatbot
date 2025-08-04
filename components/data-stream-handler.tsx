@@ -37,6 +37,7 @@ export function DataStreamHandler() {
 
         switch (delta.type) {
           case 'data-id':
+            console.log('Setting artifact documentId:', delta.data);
             return {
               ...draftArtifact,
               documentId: delta.data,
@@ -44,6 +45,7 @@ export function DataStreamHandler() {
             };
 
           case 'data-title':
+            console.log('Setting artifact title:', delta.data);
             return {
               ...draftArtifact,
               title: delta.data,
@@ -51,13 +53,17 @@ export function DataStreamHandler() {
             };
 
           case 'data-kind':
+            console.log('Setting artifact kind:', delta.data);
             return {
               ...draftArtifact,
               kind: delta.data,
               status: 'streaming',
+              // Make canvas artifacts visible immediately when created
+              isVisible: delta.data === 'canvas' ? true : draftArtifact.isVisible,
             };
 
           case 'data-clear':
+            console.log('Clearing artifact content');
             return {
               ...draftArtifact,
               content: '',
@@ -65,6 +71,7 @@ export function DataStreamHandler() {
             };
 
           case 'data-finish':
+            console.log('Finishing artifact creation');
             return {
               ...draftArtifact,
               status: 'idle',

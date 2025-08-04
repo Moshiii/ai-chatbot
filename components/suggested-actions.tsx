@@ -30,9 +30,9 @@ function PureSuggestedActions({
       action: `Write code to demonstrate djikstra's algorithm`,
     },
     {
-      title: 'Help me write an essay',
-      label: `about silicon valley`,
-      action: `Help me write an essay about silicon valley`,
+      title: 'Create a task decomposition',
+      label: 'canvas for project planning',
+      action: 'Please create a task decomposition canvas to help me plan and organize this project into subtasks with appropriate agents.',
     },
     {
       title: 'What is the weather',

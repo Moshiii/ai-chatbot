@@ -64,32 +64,38 @@ export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
     isLoading,
     metadata,
   }) => {
-    if (isLoading) {
-      return <DocumentSkeleton artifactKind="text" />;
-    }
-
-    if (mode === 'diff') {
-      const oldContent = getDocumentContentById(currentVersionIndex - 1);
-      const newContent = getDocumentContentById(currentVersionIndex);
-
-      return <DiffView oldContent={oldContent} newContent={newContent} />;
-    }
+    // Always render all components to ensure hooks are called consistently
+    const oldContent = getDocumentContentById(currentVersionIndex - 1);
+    const newContent = getDocumentContentById(currentVersionIndex);
 
     return (
       <>
-        <div className="flex flex-row py-8 md:p-20 px-4">
-          <Editor
-            content={content}
-            suggestions={metadata ? metadata.suggestions : []}
-            isCurrentVersion={isCurrentVersion}
-            currentVersionIndex={currentVersionIndex}
-            status={status}
-            onSaveContent={onSaveContent}
-          />
+        {/* Always render DocumentSkeleton but conditionally show */}
+        <div style={{ display: isLoading ? 'block' : 'none' }}>
+          <DocumentSkeleton artifactKind="text" />
+        </div>
 
-          {metadata?.suggestions && metadata.suggestions.length > 0 ? (
-            <div className="md:hidden h-dvh w-12 shrink-0" />
-          ) : null}
+        {/* Always render DiffView but conditionally show */}
+        <div style={{ display: !isLoading && mode === 'diff' ? 'block' : 'none' }}>
+          <DiffView oldContent={oldContent} newContent={newContent} />
+        </div>
+
+        {/* Always render Editor but conditionally show */}
+        <div style={{ display: !isLoading && mode !== 'diff' ? 'block' : 'none' }}>
+          <div className="flex flex-row py-8 md:p-20 px-4">
+            <Editor
+              content={content}
+              suggestions={metadata ? metadata.suggestions : []}
+              isCurrentVersion={isCurrentVersion}
+              currentVersionIndex={currentVersionIndex}
+              status={status}
+              onSaveContent={onSaveContent}
+            />
+
+            {metadata?.suggestions && metadata.suggestions.length > 0 ? (
+              <div className="md:hidden h-dvh w-12 shrink-0" />
+            ) : null}
+          </div>
         </div>
       </>
     );

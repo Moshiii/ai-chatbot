@@ -74,4 +74,23 @@ test.describe('Artifacts activity', () => {
     const secondAssistantMessage = await chatPage.getRecentAssistantMessage();
     expect(secondAssistantMessage.content).toBe("You're welcome!");
   });
+
+  test('Create a canvas artifact for task decomposition', async () => {
+    test.fixme();
+    await chatPage.createNewChat();
+
+    await chatPage.sendUserMessage(
+      'Please create a task decomposition canvas to help me plan and organize this project into subtasks with appropriate agents.',
+    );
+    await artifactPage.isGenerationComplete();
+
+    expect(artifactPage.artifact).toBeVisible();
+
+    const assistantMessage = await chatPage.getRecentAssistantMessage();
+    expect(assistantMessage.content).toBe(
+      'A document was created and is now visible to the user.',
+    );
+
+    await chatPage.hasChatIdInUrl();
+  });
 });
