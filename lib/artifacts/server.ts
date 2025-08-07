@@ -9,6 +9,14 @@ import { saveDocument } from '../db/queries';
 import type { Session } from 'next-auth';
 import type { UIMessageStreamWriter } from 'ai';
 import type { ChatMessage } from '../types';
+// Constants for artifact types
+const ARTIFACT_TYPES = {
+  TEXT: 'text',
+  CODE: 'code',
+  IMAGE: 'image',
+  SHEET: 'sheet',
+  CANVAS: 'canvas',
+} as const;
 
 export interface SaveDocumentProps {
   id: string;
@@ -99,4 +107,4 @@ export const documentHandlersByArtifactKind: Array<DocumentHandler> = [
   canvasDocumentHandler,
 ];
 
-export const artifactKinds = ['text', 'code', 'image', 'sheet', 'canvas'] as const;
+export const artifactKinds = [ARTIFACT_TYPES.TEXT, ARTIFACT_TYPES.CODE, ARTIFACT_TYPES.IMAGE, ARTIFACT_TYPES.SHEET, ARTIFACT_TYPES.CANVAS] as const;

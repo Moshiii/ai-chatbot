@@ -3,11 +3,22 @@ import type { CreateDocumentCallbackProps, UpdateDocumentCallbackProps } from '@
 import { streamText, smoothStream } from 'ai';
 import { myProvider } from '@/lib/ai/providers';
 
-export const canvasDocumentHandler = createDocumentHandler({
-  kind: 'canvas',
-  onCreateDocument: async ({ id, title, dataStream }: CreateDocumentCallbackProps) => {
-    // Use LLM to generate real task breakdown based on the title
-    const taskBreakdownPrompt = `
+// Constants for task breakdown constraints
+const TASK_BREAKDOWN_CONSTRAINTS = {
+  MIN_TASKS: 3,
+  MAX_TASKS: 6,
+  MIN_AGENTS: 2,
+  MAX_AGENTS: 4,
+  AGENT_NAME_MAX_LENGTH: 15,
+  AGENT_DESCRIPTION_MAX_WORDS: 10,
+  CAPABILITIES_COUNT: 3,
+  TASK_STREAMING_DELAY: 800,
+} as const;
+
+const MODEL_NAME = 'artifact-model';
+
+// Task breakdown prompt template
+const TASK_BREAKDOWN_PROMPT_TEMPLATE = (title: string) => `
 You are an expert project manager and task decomposition specialist. Based on the given project or task title, create a comprehensive breakdown of tasks and appropriate agents to execute them.
 
 Project/Task: "${title}"
@@ -26,19 +37,19 @@ Please create a JSON structure with the following format:
     {
       "id": "agent-{unique-id}", 
       "name": "Agent Name",
-      "description": "Brief description under 10 words",
+      "description": "Brief description under ${TASK_BREAKDOWN_CONSTRAINTS.AGENT_DESCRIPTION_MAX_WORDS} words",
       "capabilities": ["Word1", "Word2", "Word3"]
     }
   ]
 }
 
 Guidelines:
-- Create 3-6 meaningful tasks that break down the project
+- Create ${TASK_BREAKDOWN_CONSTRAINTS.MIN_TASKS}-${TASK_BREAKDOWN_CONSTRAINTS.MAX_TASKS} meaningful tasks that break down the project
 - Each task should be specific and actionable
-- Create 2-4 specialized agents that can handle the tasks
-- Agent names must be short and descriptive (max 15 characters)
-- Agent descriptions must be concise and under 10 words total
-- Include exactly 3 single-word capabilities for each agent
+- Create ${TASK_BREAKDOWN_CONSTRAINTS.MIN_AGENTS}-${TASK_BREAKDOWN_CONSTRAINTS.MAX_AGENTS} specialized agents that can handle the tasks
+- Agent names must be short and descriptive (max ${TASK_BREAKDOWN_CONSTRAINTS.AGENT_NAME_MAX_LENGTH} characters)
+- Agent descriptions must be concise and under ${TASK_BREAKDOWN_CONSTRAINTS.AGENT_DESCRIPTION_MAX_WORDS} words total
+- Include exactly ${TASK_BREAKDOWN_CONSTRAINTS.CAPABILITIES_COUNT} single-word capabilities for each agent
 - Each capability should be one word only (no spaces or hyphens)
 - Be realistic and practical in your breakdown
 - Focus on the actual project requirements, not generic phases
@@ -46,10 +57,20 @@ Guidelines:
 Return only the JSON structure, no additional text.
 `;
 
+// Helper function to generate unique task ID
+const generateUniqueTaskId = () => 
+  `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+export const canvasDocumentHandler = createDocumentHandler({
+  kind: 'canvas',
+  onCreateDocument: async ({ id, title, dataStream }: CreateDocumentCallbackProps) => {
+    // Use LLM to generate real task breakdown based on the title
+    const taskBreakdownPrompt = TASK_BREAKDOWN_PROMPT_TEMPLATE(title);
+
     let llmResponse = '';
 
     const { fullStream } = streamText({
-      model: myProvider.languageModel('artifact-model'),
+      model: myProvider.languageModel(MODEL_NAME),
       system: 'You are a task decomposition expert. Always respond with valid JSON only.',
       experimental_transform: smoothStream({ chunking: 'word' }),
       prompt: taskBreakdownPrompt,
@@ -109,7 +130,7 @@ Return only the JSON structure, no additional text.
       const task = tasks[i];
       
       // Generate unique task ID
-      const uniqueTaskId = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const uniqueTaskId = generateUniqueTaskId();
       const taskWithUniqueId = { ...task, id: uniqueTaskId };
       
       console.log(`Streaming task ${i + 1}/${tasks.length}: ${task.title} with ID: ${uniqueTaskId}`);
@@ -123,7 +144,7 @@ Return only the JSON structure, no additional text.
       
       // Add a small delay between tasks for visual effect
       if (i < tasks.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 800)); // 800ms delay between tasks
+        await new Promise(resolve => setTimeout(resolve, TASK_BREAKDOWN_CONSTRAINTS.TASK_STREAMING_DELAY));
       }
     }
     
@@ -138,7 +159,7 @@ Return only the JSON structure, no additional text.
     
     // Add a new task based on the description
     const newTask = {
-      id: `task-${Date.now()}`,
+      id: generateUniqueTaskId(),
       title: `New Task - ${new Date().toLocaleTimeString()}`,
       description: description || 'Task added via update',
       status: 'pending' as const,

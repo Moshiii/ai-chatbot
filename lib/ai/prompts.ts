@@ -1,10 +1,35 @@
 import type { ArtifactKind } from '@/components/artifact';
 import type { Geo } from '@vercel/functions';
 
+// Constants for artifact types
+const ARTIFACT_TYPES = {
+  TEXT: 'text',
+  CODE: 'code',
+  IMAGE: 'image',
+  SHEET: 'sheet',
+  CANVAS: 'canvas',
+} as const;
+
+// Canvas-specific prompt constants
+const CANVAS_PROMPT_CONSTANTS = {
+  TRIGGER_PHRASES: [
+    'task decomposition',
+    'break down',
+    'decompose',
+    'project planning',
+    'workflow',
+    'subtasks',
+    'task breakdown',
+    'task organization',
+    'project structure',
+  ],
+  IMMEDIATE_ACTION: 'IMMEDIATELY create a canvas artifact',
+} as const;
+
 export const artifactsPrompt = `
 Artifacts is a special user interface mode that helps users with writing, editing, and other content creation tasks. When artifact is open, it is on the right side of the screen, while the conversation is on the left side. When creating or updating documents, changes are reflected in real-time on the artifacts and visible to the user.
 
-**CRITICAL: When users ask for task decomposition, project planning, breaking down tasks, or organizing work into subtasks, IMMEDIATELY create a canvas artifact using \`createDocument\` with kind: 'canvas'.**
+**CRITICAL: When users ask for task decomposition, project planning, breaking down tasks, or organizing work into subtasks, ${CANVAS_PROMPT_CONSTANTS.IMMEDIATE_ACTION} using \`createDocument\` with kind: '${ARTIFACT_TYPES.CANVAS}'.**
 
 When asked to write code, always use artifacts. When writing code, specify the language in the backticks, e.g. \`\`\`python\`code here\`\`\`. The default language is Python. Other languages are not yet supported, so let the user know if they request a different language.
 
@@ -13,20 +38,20 @@ DO NOT UPDATE DOCUMENTS IMMEDIATELY AFTER CREATING THEM. WAIT FOR USER FEEDBACK 
 This is a guide for using artifacts tools: \`createDocument\` and \`updateDocument\`, which render content on a artifacts beside the conversation.
 
 **Available artifact types:**
-- \`text\`: For writing essays, emails, articles, and other text content
-- \`code\`: For code snippets and programming examples
-- \`image\`: For image generation and editing
-- \`sheet\`: For spreadsheet creation and data organization
-- \`canvas\`: For task decomposition and agent coordination workflows
+- \`${ARTIFACT_TYPES.TEXT}\`: For writing essays, emails, articles, and other text content
+- \`${ARTIFACT_TYPES.CODE}\`: For code snippets and programming examples
+- \`${ARTIFACT_TYPES.IMAGE}\`: For image generation and editing
+- \`${ARTIFACT_TYPES.SHEET}\`: For spreadsheet creation and data organization
+- \`${ARTIFACT_TYPES.CANVAS}\`: For task decomposition and agent coordination workflows
 
 **When to use \`createDocument\`:**
 - For substantial content (>10 lines) or code
 - For content users will likely save/reuse (emails, code, essays, etc.)
 - When explicitly requested to create a document
 - For when content contains a single code snippet
-- For task decomposition and project planning (use \`canvas\` kind)
+- For task decomposition and project planning (use \`${ARTIFACT_TYPES.CANVAS}\` kind)
 
-**When to use \`canvas\` kind:**
+**When to use \`${ARTIFACT_TYPES.CANVAS}\` kind:**
 - When users request task decomposition
 - When users ask to "break down" or "decompose" tasks
 - When users mention "project planning" or "workflow"
@@ -36,7 +61,7 @@ This is a guide for using artifacts tools: \`createDocument\` and \`updateDocume
 - For agent coordination and workflow visualization
 - When users ask for "task organization" or "project structure"
 
-**IMPORTANT: If the user asks for task decomposition, project planning, or breaking down tasks, ALWAYS use \`canvas\` kind and create a document immediately.**
+**IMPORTANT: If the user asks for task decomposition, project planning, or breaking down tasks, ALWAYS use \`${ARTIFACT_TYPES.CANVAS}\` kind and create a document immediately.**
 
 **When NOT to use \`createDocument\`:**
 - For informational/explanatory content
@@ -122,19 +147,19 @@ export const updateDocumentPrompt = (
   currentContent: string | null,
   type: ArtifactKind,
 ) =>
-  type === 'text'
+  type === ARTIFACT_TYPES.TEXT
     ? `\
 Improve the following contents of the document based on the given prompt.
 
 ${currentContent}
 `
-    : type === 'code'
+    : type === ARTIFACT_TYPES.CODE
       ? `\
 Improve the following code snippet based on the given prompt.
 
 ${currentContent}
 `
-      : type === 'sheet'
+      : type === ARTIFACT_TYPES.SHEET
         ? `\
 Improve the following spreadsheet based on the given prompt.
 

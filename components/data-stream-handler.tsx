@@ -5,6 +5,11 @@ import { artifactDefinitions } from './artifact';
 import { initialArtifactData, useArtifact } from '@/hooks/use-artifact';
 import { useDataStream } from './data-stream-provider';
 
+// Constants for artifact types
+const ARTIFACT_TYPES = {
+  CANVAS: 'canvas',
+} as const;
+
 export function DataStreamHandler() {
   const { dataStream } = useDataStream();
 
@@ -23,11 +28,15 @@ export function DataStreamHandler() {
       );
 
       if (artifactDefinition?.onStreamPart) {
-        artifactDefinition.onStreamPart({
-          streamPart: delta,
-          setArtifact,
-          setMetadata,
-        });
+        try {
+          artifactDefinition.onStreamPart({
+            streamPart: delta,
+            setArtifact,
+            setMetadata,
+          });
+        } catch (error) {
+          console.error('Error processing stream part:', error);
+        }
       }
 
       setArtifact((draftArtifact) => {
@@ -59,7 +68,7 @@ export function DataStreamHandler() {
               kind: delta.data,
               status: 'streaming',
               // Make canvas artifacts visible immediately when created
-              isVisible: delta.data === 'canvas' ? true : draftArtifact.isVisible,
+              isVisible: delta.data === ARTIFACT_TYPES.CANVAS ? true : draftArtifact.isVisible,
             };
 
           case 'data-clear':

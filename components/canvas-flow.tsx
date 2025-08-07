@@ -22,6 +22,45 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PlayIcon, CheckIcon, ClockIcon, FileTextIcon, BarChart3Icon, UserPlusIcon } from 'lucide-react';
 
+// Constants for node positioning and spacing
+const LAYOUT_CONSTANTS = {
+  VERTICAL_SPACING: {
+    TASKS: 200,
+    AGENTS_RESPONSES: 250,
+    SUMMARY: 150,
+  },
+  HORIZONTAL_SPACING: {
+    TASKS_TO_AGENTS: 400,
+    AGENTS_TO_RESPONSES: 400,
+  },
+  INITIAL_POSITIONS: {
+    TITLE: { x: 50, y: 50 },
+    FIRST_TASK: { x: 50, y: 200 },
+    FIRST_AGENT: { x: 450, y: 200 },
+    FIRST_RESPONSE: { x: 850, y: 200 },
+  },
+} as const;
+
+// Constants for edge styling
+const EDGE_STYLES = {
+  TASK_CHAIN: { stroke: '#3b82f6', strokeWidth: 3 },
+  TASK_TO_SUMMARY: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' },
+  TASK_TO_AGENT: { stroke: '#10b981', strokeWidth: 3, strokeDasharray: '3,3' },
+  AGENT_TO_RESPONSE: { stroke: '#f59e0b', strokeWidth: 3 },
+  TITLE_TO_TASK: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' },
+} as const;
+
+// Constants for handle styling
+const HANDLE_STYLES = {
+  TITLE_OUTPUT: { background: '#8b5cf6', width: '12px', height: '12px' },
+  TASK_INPUT: { background: '#8b5cf6', width: '12px', height: '12px' },
+  TASK_OUTPUT: { background: '#3b82f6', width: '12px', height: '12px' },
+  AGENT_INPUT: { background: '#3b82f6', width: '12px', height: '12px' },
+  AGENT_OUTPUT: { background: '#f59e0b', width: '12px', height: '12px' },
+  RESPONSE_INPUT: { background: '#f59e0b', width: '12px', height: '12px' },
+  SUMMARY_INPUT: { background: '#8b5cf6', width: '12px', height: '12px' },
+} as const;
+
 interface Task {
   id: string;
   title: string;
@@ -69,7 +108,7 @@ const TaskDecompositionTitleNode = () => {
         type="source"
         position={Position.Bottom}
         id="task-decomposition-title-output"
-        style={{ background: '#8b5cf6', width: '12px', height: '12px' }}
+        style={HANDLE_STYLES.TITLE_OUTPUT}
       />
       
       <CardHeader className="pb-2">
@@ -95,7 +134,7 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
         type="target"
         position={Position.Top}
         id={`task-${data.task.id}-input-top`}
-        style={{ background: '#8b5cf6', width: '12px', height: '12px' }}
+        style={HANDLE_STYLES.TASK_INPUT}
       />
       
       {/* Input handle on the left side */}
@@ -103,7 +142,7 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
         type="target"
         position={Position.Left}
         id={`task-${data.task.id}-input-left`}
-        style={{ background: '#8b5cf6', width: '12px', height: '12px' }}
+        style={HANDLE_STYLES.TASK_INPUT}
       />
       
       {/* Output handle on the bottom */}
@@ -111,7 +150,7 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
         type="source"
         position={Position.Bottom}
         id={`task-${data.task.id}-output-bottom`}
-        style={{ background: '#3b82f6', width: '12px', height: '12px' }}
+        style={HANDLE_STYLES.TASK_OUTPUT}
       />
       
       {/* Output handle on the right side */}
@@ -119,7 +158,7 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
         type="source"
         position={Position.Right}
         id={`task-${data.task.id}-output-right`}
-        style={{ background: '#3b82f6', width: '12px', height: '12px' }}
+        style={HANDLE_STYLES.TASK_OUTPUT}
       />
       
       <CardHeader className="pb-2">
@@ -183,7 +222,7 @@ const AgentCardNode = ({ data }: { data: { agent: Agent; onExecute: () => void; 
         type="target"
         position={Position.Left}
         id={`agent-${data.agent.id}-input`}
-        style={{ background: '#3b82f6', width: '12px', height: '12px' }}
+        style={HANDLE_STYLES.AGENT_INPUT}
       />
       
       {/* Output handle on the right side */}
@@ -191,7 +230,7 @@ const AgentCardNode = ({ data }: { data: { agent: Agent; onExecute: () => void; 
         type="source"
         position={Position.Right}
         id={`agent-${data.agent.id}-output`}
-        style={{ background: '#f59e0b', width: '12px', height: '12px' }}
+        style={HANDLE_STYLES.AGENT_OUTPUT}
       />
       
       <CardHeader className="pb-3">
@@ -251,7 +290,7 @@ const ResponseNode = ({ data }: { data: { response: Response; agentName: string 
         type="target"
         position={Position.Left}
         id={`response-${data.response.id}-input`}
-        style={{ background: '#f59e0b', width: '12px', height: '12px' }}
+        style={HANDLE_STYLES.RESPONSE_INPUT}
       />
       
       <CardHeader className="pb-3">
@@ -281,7 +320,7 @@ const SummaryNode = ({ data }: { data: { summary: Summary | null; onSummarize: (
         type="target"
         position={Position.Top}
         id="summary-input"
-        style={{ background: '#8b5cf6', width: '12px', height: '12px' }}
+        style={HANDLE_STYLES.SUMMARY_INPUT}
       />
       
       <CardHeader className="pb-3">
@@ -342,24 +381,22 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
     // Clear existing edges to prevent conflicts
     console.log('Current edges before clearing:', edges.map(edge => edge.id));
     
-    // Spacing strategy:
-    // - Vertical spacing: 200px between tasks, 250px between agents/responses, 150px to summary
-    // - Horizontal spacing: 400px between columns (tasks -> agents -> responses)
-    // - This ensures edges are clearly visible and don't overlap with cards
-    
     // Add Task Decomposition title node
     newNodes.push({
       id: 'task-decomposition-title',
       type: 'taskDecompositionTitle',
-      position: nodePositionsRef.current.get('task-decomposition-title') || { x: 50, y: 50 },
+      position: nodePositionsRef.current.get('task-decomposition-title') || LAYOUT_CONSTANTS.INITIAL_POSITIONS.TITLE,
       data: {},
     });
 
     // Add individual Task nodes in a vertical chain with proper spacing for edge visibility
     tasks.forEach((task, index) => {
       const savedPosition = nodePositionsRef.current.get(`task-${task.id}`);
-      // Increase vertical spacing to 200px to ensure edges are visible
-      const defaultPosition = { x: 50, y: 200 + index * 200 };
+      // Increase vertical spacing to ensure edges are visible
+      const defaultPosition = { 
+        x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.x, 
+        y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.y + index * LAYOUT_CONSTANTS.VERTICAL_SPACING.TASKS 
+      };
       
       newNodes.push({
         id: `task-${task.id}`,
@@ -373,8 +410,11 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
     agents.forEach((agent, index) => {
       const isExecuted = responses.some(r => r.agentId === agent.id);
       const savedPosition = nodePositionsRef.current.get(`agent-${agent.id}`);
-      // Position agents 400px to the right of tasks with 250px vertical spacing
-      const defaultPosition = { x: 450, y: 200 + index * 250 };
+      // Position agents horizontally from tasks with vertical spacing
+      const defaultPosition = { 
+        x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_AGENT.x, 
+        y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_AGENT.y + index * LAYOUT_CONSTANTS.VERTICAL_SPACING.AGENTS_RESPONSES 
+      };
       
       newNodes.push({
         id: `agent-${agent.id}`,
@@ -393,8 +433,11 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
       const agent = agents.find(a => a.id === response.agentId);
       if (agent) {
         const savedPosition = nodePositionsRef.current.get(`response-${response.id}`);
-        // Position responses 400px to the right of agents with 250px vertical spacing
-        const defaultPosition = { x: 850, y: 200 + index * 250 };
+        // Position responses horizontally from agents with vertical spacing
+        const defaultPosition = { 
+          x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_RESPONSE.x, 
+          y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_RESPONSE.y + index * LAYOUT_CONSTANTS.VERTICAL_SPACING.AGENTS_RESPONSES 
+        };
         
         newNodes.push({
           id: `response-${response.id}`,
@@ -410,8 +453,11 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
 
     // Add Summary node positioned below the task chain with closer spacing
     const savedPosition = nodePositionsRef.current.get('summary-node');
-    // Position summary below the last task with 150px spacing for better proximity
-    const defaultPosition = { x: 50, y: 200 + tasks.length * 200 + 150 };
+    // Position summary below the last task with spacing for better proximity
+    const defaultPosition = { 
+      x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.x, 
+      y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.y + tasks.length * LAYOUT_CONSTANTS.VERTICAL_SPACING.TASKS + LAYOUT_CONSTANTS.VERTICAL_SPACING.SUMMARY 
+    };
     
     newNodes.push({
       id: 'summary-node',
@@ -433,7 +479,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         source: 'task-decomposition-title',
         target: `task-${tasks[0].id}`,
         type: 'default',
-        style: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' }
+        style: EDGE_STYLES.TITLE_TO_TASK
       });
 
       // Connect tasks in sequence (vertical)
@@ -443,7 +489,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
           source: `task-${tasks[i].id}`,
           target: `task-${tasks[i + 1].id}`,
           type: 'default',
-          style: { stroke: '#3b82f6', strokeWidth: 3 }
+          style: EDGE_STYLES.TASK_CHAIN
         });
       }
 
@@ -454,7 +500,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         source: `task-${lastTaskId}`,
         target: 'summary-node',
         type: 'default',
-        style: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' }
+        style: EDGE_STYLES.TASK_TO_SUMMARY
       });
       console.log('Created last task to summary edge:', `ts-${lastTaskId}`);
     }
@@ -483,7 +529,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
               sourceHandle: `task-${agent.taskId}-output-right`,
               targetHandle: `agent-${agent.id}-input`,
               type: 'default',
-              style: { stroke: '#10b981', strokeWidth: 3, strokeDasharray: '3,3' }
+              style: EDGE_STYLES.TASK_TO_AGENT
             });
             console.log('Created task-agent edge:', edgeId, 'for agent:', agent.id, 'task:', agent.taskId);
           } else {
@@ -511,7 +557,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
             sourceHandle: `agent-${response.agentId}-output`,
             targetHandle: `response-${response.id}-input`,
             type: 'default',
-            style: { stroke: '#f59e0b', strokeWidth: 3 }
+            style: EDGE_STYLES.AGENT_TO_RESPONSE
           });
           console.log('Created horizontal agent-response edge:', edgeId);
         }

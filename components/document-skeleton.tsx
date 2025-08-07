@@ -2,12 +2,18 @@
 
 import { ArtifactKind } from './artifact';
 
+// Constants for artifact types
+const ARTIFACT_TYPES = {
+  CANVAS: 'canvas',
+  IMAGE: 'image',
+} as const;
+
 export const DocumentSkeleton = ({
   artifactKind,
 }: {
   artifactKind: ArtifactKind;
 }) => {
-  if (artifactKind === 'image') {
+  if (artifactKind === ARTIFACT_TYPES.IMAGE) {
     return (
       <div className="flex flex-col gap-4 w-full justify-center items-center h-[calc(100dvh-60px)]">
         <div className="animate-pulse rounded-lg bg-muted-foreground/20 size-96" />
@@ -15,7 +21,7 @@ export const DocumentSkeleton = ({
     );
   }
   
-  if (artifactKind === 'canvas') {
+  if (artifactKind === ARTIFACT_TYPES.CANVAS) {
     return (
       <div className="flex flex-col gap-4 w-full h-full">
         <div className="animate-pulse rounded-lg h-8 bg-muted-foreground/20 w-1/3" />
