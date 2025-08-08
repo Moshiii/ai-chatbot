@@ -313,11 +313,27 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       if (content && (!metadata?.tasks || metadata.tasks.length === 0)) {
         try {
           const parsedData = JSON.parse(content);
-          if (parsedData.tasks) {
+          if (parsedData.tasks && parsedData.tasks.length > 0) {
+            console.log('Loading saved canvas data with', parsedData.tasks.length, 'tasks');
+            
+            // Convert timestamp strings back to Date objects for responses
+            const responses = (parsedData.responses || []).map((response: any) => ({
+              ...response,
+              timestamp: new Date(response.timestamp)
+            }));
+            
+            // Convert timestamp string back to Date object for summary
+            const summary = parsedData.summary ? {
+              ...parsedData.summary,
+              timestamp: new Date(parsedData.summary.timestamp)
+            } : null;
+            
             setMetadata((metadata) => ({
               ...metadata,
               tasks: parsedData.tasks,
               agents: parsedData.agents || [],
+              responses,
+              summary,
             }));
           }
         } catch (error) {
@@ -325,6 +341,26 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
         }
       }
     }, [content, metadata, setMetadata]);
+
+    // Save metadata changes to document content
+    useEffect(() => {
+      if (metadata && metadata.tasks && metadata.tasks.length > 0 && onSaveContent) {
+        const dataToSave = {
+          tasks: metadata.tasks,
+          agents: metadata.agents || [],
+          responses: metadata.responses || [],
+          summary: metadata.summary || null,
+        };
+        
+        const contentToSave = JSON.stringify(dataToSave, null, 2);
+        
+        // Only save if content has actually changed
+        if (contentToSave !== content) {
+          console.log('Saving canvas metadata changes');
+          onSaveContent(contentToSave, true); // Use debounce to avoid too frequent saves
+        }
+      }
+    }, [metadata, onSaveContent, content]);
 
     if (isLoading) {
       return <DocumentSkeleton artifactKind="canvas" />;

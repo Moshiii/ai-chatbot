@@ -451,20 +451,22 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
       }
     });
 
-    // Add Summary node positioned below the task chain with closer spacing
-    const savedPosition = nodePositionsRef.current.get('summary-node');
-    // Position summary below the last task with spacing for better proximity
-    const defaultPosition = { 
-      x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.x, 
-      y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.y + tasks.length * LAYOUT_CONSTANTS.VERTICAL_SPACING.TASKS + LAYOUT_CONSTANTS.VERTICAL_SPACING.SUMMARY 
-    };
-    
-    newNodes.push({
-      id: 'summary-node',
-      type: 'summary',
-      position: savedPosition || defaultPosition,
-      data: { summary, onSummarize },
-    });
+    // Add Summary node only if there are responses to summarize
+    if (responses.length > 0) {
+      const savedPosition = nodePositionsRef.current.get('summary-node');
+      // Position summary below the last task with spacing for better proximity
+      const defaultPosition = { 
+        x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.x, 
+        y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.y + tasks.length * LAYOUT_CONSTANTS.VERTICAL_SPACING.TASKS + LAYOUT_CONSTANTS.VERTICAL_SPACING.SUMMARY 
+      };
+      
+      newNodes.push({
+        id: 'summary-node',
+        type: 'summary',
+        position: savedPosition || defaultPosition,
+        data: { summary, onSummarize },
+      });
+    }
 
     setNodes(newNodes);
 
@@ -493,16 +495,18 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         });
       }
 
-      // Automatically connect the last task to the summary node
-      const lastTaskId = tasks[tasks.length - 1].id;
-      newEdges.push({
-        id: `ts-${lastTaskId}`,
-        source: `task-${lastTaskId}`,
-        target: 'summary-node',
-        type: 'default',
-        style: EDGE_STYLES.TASK_TO_SUMMARY
-      });
-      console.log('Created last task to summary edge:', `ts-${lastTaskId}`);
+      // Connect the last task to the summary node only if responses exist
+      if (responses.length > 0) {
+        const lastTaskId = tasks[tasks.length - 1].id;
+        newEdges.push({
+          id: `ts-${lastTaskId}`,
+          source: `task-${lastTaskId}`,
+          target: 'summary-node',
+          type: 'default',
+          style: EDGE_STYLES.TASK_TO_SUMMARY
+        });
+        console.log('Created last task to summary edge:', `ts-${lastTaskId}`);
+      }
     }
     
     // Create task-agent connections for associated agents

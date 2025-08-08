@@ -126,12 +126,17 @@ export const canvasDocumentHandler = createDocumentHandler({
     // Stream each task individually with a delay
     console.log(`Starting to stream ${tasks.length} tasks...`);
     
+    const finalTasks = [];
+    
     for (let i = 0; i < tasks.length; i++) {
       const task = tasks[i];
       
       // Generate unique task ID
       const uniqueTaskId = generateUniqueTaskId();
       const taskWithUniqueId = { ...task, id: uniqueTaskId };
+      
+      // Add to final tasks array
+      finalTasks.push(taskWithUniqueId);
       
       console.log(`Streaming task ${i + 1}/${tasks.length}: ${task.title} with ID: ${uniqueTaskId}`);
       
@@ -150,8 +155,14 @@ export const canvasDocumentHandler = createDocumentHandler({
     
     console.log('Finished streaming all tasks');
     
+    // Build the final complete data structure with all tasks
+    const finalData = {
+      tasks: finalTasks,
+      agents: [], // Start with empty agents array, will be populated later
+    };
+    
     // Return the final complete data structure
-    return JSON.stringify(initialData, null, 2);
+    return JSON.stringify(finalData, null, 2);
   },
   onUpdateDocument: async ({ document, description, dataStream }: UpdateDocumentCallbackProps) => {
     // For canvas updates, we'll append the description to the existing content
