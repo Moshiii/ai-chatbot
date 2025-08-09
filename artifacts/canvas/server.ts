@@ -2,13 +2,10 @@ import { createDocumentHandler } from '@/lib/artifacts/server';
 import type { CreateDocumentCallbackProps, UpdateDocumentCallbackProps } from '@/lib/artifacts/server';
 import { streamText, smoothStream } from 'ai';
 import { myProvider } from '@/lib/ai/providers';
+import { generateUUID } from '@/lib/utils';
 
 // Constants for task breakdown constraints
 const TASK_BREAKDOWN_CONSTRAINTS = {
-  MIN_TASKS: 3,
-  MAX_TASKS: 6,
-  MIN_AGENTS: 2,
-  MAX_AGENTS: 4,
   AGENT_NAME_MAX_LENGTH: 15,
   AGENT_DESCRIPTION_MAX_WORDS: 10,
   CAPABILITIES_COUNT: 3,
@@ -27,39 +24,27 @@ Please create a JSON structure with the following format:
 {
   "tasks": [
     {
-      "id": "task-{unique-id}",
       "title": "Task Title",
       "description": "Detailed description of what this task involves",
       "status": "pending"
-    }
-  ],
-  "agents": [
-    {
-      "id": "agent-{unique-id}", 
-      "name": "Agent Name",
-      "description": "Brief description under ${TASK_BREAKDOWN_CONSTRAINTS.AGENT_DESCRIPTION_MAX_WORDS} words",
-      "capabilities": ["Word1", "Word2", "Word3"]
     }
   ]
 }
 
 Guidelines:
-- Create ${TASK_BREAKDOWN_CONSTRAINTS.MIN_TASKS}-${TASK_BREAKDOWN_CONSTRAINTS.MAX_TASKS} meaningful tasks that break down the project
+- Create as many meaningful tasks as needed to thoroughly break down the project
 - Each task should be specific and actionable
-- Create ${TASK_BREAKDOWN_CONSTRAINTS.MIN_AGENTS}-${TASK_BREAKDOWN_CONSTRAINTS.MAX_AGENTS} specialized agents that can handle the tasks
-- Agent names must be short and descriptive (max ${TASK_BREAKDOWN_CONSTRAINTS.AGENT_NAME_MAX_LENGTH} characters)
-- Agent descriptions must be concise and under ${TASK_BREAKDOWN_CONSTRAINTS.AGENT_DESCRIPTION_MAX_WORDS} words total
-- Include exactly ${TASK_BREAKDOWN_CONSTRAINTS.CAPABILITIES_COUNT} single-word capabilities for each agent
-- Each capability should be one word only (no spaces or hyphens)
 - Be realistic and practical in your breakdown
 - Focus on the actual project requirements, not generic phases
+- Do NOT include "id" fields - these will be generated server-side
+- Do NOT include agents - they will be created separately when needed
 
 Return only the JSON structure, no additional text.
 `;
 
-// Helper function to generate unique task ID
-const generateUniqueTaskId = () => 
-  `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+// Remove the custom ID generation function since we'll use UUID
+// const generateUniqueTaskId = () => 
+//   `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 export const canvasDocumentHandler = createDocumentHandler({
   kind: 'canvas',
@@ -102,7 +87,6 @@ export const canvasDocumentHandler = createDocumentHandler({
 
     // Stream tasks one by one for better UX
     const tasks = canvasData.tasks || [];
-    const agents = canvasData.agents || [];
     
     // Start with empty data structure
     const initialData: {
@@ -112,15 +96,8 @@ export const canvasDocumentHandler = createDocumentHandler({
         description: string;
         status: 'pending' | 'in-progress' | 'completed';
       }>;
-      agents: Array<{
-        id: string;
-        name: string;
-        description: string;
-        capabilities: string[];
-      }>;
     } = {
       tasks: [],
-      agents: [], // Start with empty agents array
     };
     
     // Stream each task individually with a delay
@@ -131,8 +108,8 @@ export const canvasDocumentHandler = createDocumentHandler({
     for (let i = 0; i < tasks.length; i++) {
       const task = tasks[i];
       
-      // Generate unique task ID
-      const uniqueTaskId = generateUniqueTaskId();
+      // Generate UUID for the task
+      const uniqueTaskId = generateUUID();
       const taskWithUniqueId = { ...task, id: uniqueTaskId };
       
       // Add to final tasks array
@@ -158,7 +135,7 @@ export const canvasDocumentHandler = createDocumentHandler({
     // Build the final complete data structure with all tasks
     const finalData = {
       tasks: finalTasks,
-      agents: [], // Start with empty agents array, will be populated later
+      agents: [], // Agents will be created separately when needed
     };
     
     // Return the final complete data structure
@@ -170,7 +147,7 @@ export const canvasDocumentHandler = createDocumentHandler({
     
     // Add a new task based on the description
     const newTask = {
-      id: generateUniqueTaskId(),
+      id: generateUUID(),
       title: `New Task - ${new Date().toLocaleTimeString()}`,
       description: description || 'Task added via update',
       status: 'pending' as const,

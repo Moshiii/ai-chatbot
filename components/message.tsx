@@ -223,6 +223,43 @@ const PurePreviewMessage = ({
                 }
               }
 
+              if (type === 'tool-createCanvas') {
+                const { toolCallId, state } = part;
+
+                if (state === 'input-available') {
+                  const { input } = part;
+                  return (
+                    <div key={`create-canvas-input-${toolCallId}`}>
+                      <DocumentPreview isReadonly={isReadonly} args={input} />
+                    </div>
+                  );
+                }
+
+                if (state === 'output-available') {
+                  const { output } = part;
+
+                  if ('error' in output) {
+                    return (
+                      <div
+                        key={`create-canvas-error-${toolCallId}`}
+                        className="text-red-500 p-2 border rounded"
+                      >
+                        Error: {String(output.error)}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={`create-canvas-output-${toolCallId}`}>
+                      <DocumentPreview
+                        isReadonly={isReadonly}
+                        result={output}
+                      />
+                    </div>
+                  );
+                }
+              }
+
               if (type === 'tool-updateDocument') {
                 const { toolCallId, state } = part;
 

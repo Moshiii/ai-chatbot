@@ -5,10 +5,7 @@ import { artifactDefinitions } from './artifact';
 import { initialArtifactData, useArtifact } from '@/hooks/use-artifact';
 import { useDataStream } from './data-stream-provider';
 
-// Constants for artifact types
-const ARTIFACT_TYPES = {
-  CANVAS: 'canvas',
-} as const;
+// No longer needed - canvas auto-switch was removed
 
 export function DataStreamHandler() {
   const { dataStream } = useDataStream();
@@ -67,8 +64,8 @@ export function DataStreamHandler() {
               ...draftArtifact,
               kind: delta.data,
               status: 'streaming',
-              // Make canvas artifacts visible immediately when created
-              isVisible: delta.data === ARTIFACT_TYPES.CANVAS ? true : draftArtifact.isVisible,
+              // Don't auto-switch to canvas mode - let user click the document widget
+              isVisible: draftArtifact.isVisible,
             };
 
           case 'data-clear':

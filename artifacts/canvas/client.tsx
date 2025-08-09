@@ -13,6 +13,7 @@ import {
 import type { Suggestion } from '@/lib/db/schema';
 import { toast } from 'sonner';
 import { getSuggestions } from '../actions';
+import { generateUUID } from '@/lib/utils';
 
 // Constants for timing and UI constraints
 const STREAMING_DELAYS = {
@@ -54,10 +55,6 @@ const requestAgentSelection = async (taskDescription: string) => {
     throw error;
   }
 };
-
-// Helper function to generate unique IDs
-const generateUniqueId = (prefix: string) => 
-  `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 // Helper function to truncate agent names
 const truncateAgentName = (name: string): string => {
@@ -290,8 +287,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
           ...draftArtifact,
           content: streamPart.data,
           status: 'streaming',
-          // Make canvas visible when it starts receiving data
-          isVisible: true,
+          // Don't auto-show canvas - let user click the widget
         };
       });
     }
@@ -399,16 +395,14 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
 
         const agentData = await requestAgentSelection(taskDescription);
         
-        // Generate a unique ID for the agent to prevent duplicates
-        const uniqueAgentId = generateUniqueId('agent');
-        
         // Ensure agent name is not longer than 15 characters to prevent UI overflow
         const truncatedAgentName = truncateAgentName(agentData.name);
         
-        const agentWithUniqueId = { ...agentData, id: uniqueAgentId, name: truncatedAgentName };
+        // Use the server-generated UUID, just update the name if needed
+        const agentWithTruncatedName = { ...agentData, name: truncatedAgentName };
         
         // Associate the agent with the task if taskId is provided
-        const agentWithTaskId = taskId ? { ...agentWithUniqueId, taskId } : agentWithUniqueId;
+        const agentWithTaskId = taskId ? { ...agentWithTruncatedName, taskId } : agentWithTruncatedName;
         
         // Add the new agent to the metadata and update task status back to pending
         setMetadata((metadata) => ({
@@ -464,7 +458,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       }
 
       // Create response with streaming content
-      const responseId = generateUniqueId('response');
+      const responseId = generateUUID();
       const initialResponse = {
         id: responseId,
         agentId,
@@ -529,7 +523,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       if (!setMetadata) return;
 
       // Create summary with streaming content
-      const summaryId = generateUniqueId('summary');
+      const summaryId = generateUUID();
       const initialSummary = {
         id: summaryId,
         content: '',
@@ -570,15 +564,18 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
         
 
         
-        <CanvasFlow 
-          tasks={metadata?.tasks || []}
-          agents={metadata?.agents || []}
-          responses={metadata?.responses || []}
-          summary={metadata?.summary || null}
-          onExecuteAgent={handleExecuteAgent}
-          onSummarize={handleSummarize}
-          onRequestAgentSelection={handleRequestAgentSelection}
-        />
+        <div className="relative w-full h-full">
+          <CanvasFlow 
+            tasks={metadata?.tasks || []}
+            agents={metadata?.agents || []}
+            responses={metadata?.responses || []}
+            summary={metadata?.summary || null}
+            onExecuteAgent={handleExecuteAgent}
+            onSummarize={handleSummarize}
+            onRequestAgentSelection={handleRequestAgentSelection}
+            isGenerating={status === 'streaming' && (!metadata?.tasks || metadata.tasks.length === 0)}
+          />
+        </div>
       </div>
     );
   },

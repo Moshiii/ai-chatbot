@@ -97,10 +97,11 @@ interface CanvasFlowProps {
   onExecuteAgent: (agentId: string) => void;
   onSummarize: () => void;
   onRequestAgentSelection?: (taskDescription: string, taskId?: string) => Promise<void>;
+  isGenerating?: boolean;
 }
 
 // Custom Task Decomposition Title Node Component with Vertical Handles
-const TaskDecompositionTitleNode = () => {
+const TaskDecompositionTitleNode = ({ data }: { data: { isGenerating?: boolean } }) => {
   return (
     <Card className="w-48 bg-white shadow-lg border-2 border-purple-200 relative">
       {/* Output handle on the bottom */}
@@ -112,9 +113,17 @@ const TaskDecompositionTitleNode = () => {
       />
       
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold text-purple-800">
-          Task Decomposition
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-purple-800">
+            Task Decomposition
+          </CardTitle>
+          {data?.isGenerating && (
+            <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-xs">
+              <ClockIcon className="w-3 h-3 mr-1" />
+              Generating
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="pt-0">
         <div className="text-xs text-gray-600">
@@ -362,7 +371,7 @@ const nodeTypes: NodeTypes = {
   summary: SummaryNode,
 };
 
-export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, onSummarize, onRequestAgentSelection }: CanvasFlowProps) {
+export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, onSummarize, onRequestAgentSelection, isGenerating = false }: CanvasFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   
@@ -386,7 +395,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
       id: 'task-decomposition-title',
       type: 'taskDecompositionTitle',
       position: nodePositionsRef.current.get('task-decomposition-title') || LAYOUT_CONSTANTS.INITIAL_POSITIONS.TITLE,
-      data: {},
+      data: { isGenerating },
     });
 
     // Add individual Task nodes in a vertical chain with proper spacing for edge visibility
@@ -576,7 +585,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
     console.log('Total edges created:', newEdges.length);
     console.log('All edge IDs:', newEdges.map(edge => edge.id));
     setEdges(newEdges);
-  }, [tasks, agents, responses, summary, onExecuteAgent, onSummarize, setNodes, setEdges]);
+  }, [tasks, agents, responses, summary, onExecuteAgent, onSummarize, setNodes, setEdges, isGenerating]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -594,6 +603,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
         fitView
+        fitViewOptions={{ padding: 0.25 }}
         className="bg-gray-50"
       >
         <Controls />

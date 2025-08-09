@@ -2,6 +2,7 @@ import { auth } from '@/app/(auth)/auth';
 import { streamText, smoothStream } from 'ai';
 import { myProvider } from '@/lib/ai/providers';
 import { ChatSDKError } from '@/lib/errors';
+import { generateUUID } from '@/lib/utils';
 
 // Constants for agent creation constraints
 const AGENT_NAME_MAX_LENGTH = 15;
@@ -11,26 +12,26 @@ const MODEL_NAME = 'artifact-model';
 
 // Agent creation prompt template
 const AGENT_CREATION_PROMPT_TEMPLATE = (taskDescription: string) => `
-You are an expert at creating specialized AI agents for specific tasks. Based on the given task description, create a new agent that would be perfectly suited to handle this task.
+You are an agent creation expert specialized in matching tasks with the most suitable AI agents. Based on the given task description, create a single specialized agent that would be perfect for handling this specific task.
 
 Task Description: "${taskDescription}"
 
-Please create a JSON structure for a new agent with the following format:
+Please create a JSON structure with the following format:
 {
-  "id": "agent-{unique-id}",
-  "name": "Descriptive Agent Name",
-  "description": "Brief description under ${AGENT_DESCRIPTION_MAX_WORDS} words",
+  "name": "Agent Name",
+  "description": "Brief description under ${AGENT_DESCRIPTION_MAX_WORDS} words", 
   "capabilities": ["Word1", "Word2", "Word3"]
 }
 
 Guidelines:
-- The agent name should be descriptive and reflect its specialization (max ${AGENT_NAME_MAX_LENGTH} characters)
-- The description must be concise and under ${AGENT_DESCRIPTION_MAX_WORDS} words total
+- Agent name must be short and descriptive (max ${AGENT_NAME_MAX_LENGTH} characters)
+- Agent description must be concise and under ${AGENT_DESCRIPTION_MAX_WORDS} words total
 - Include exactly ${CAPABILITIES_COUNT} single-word capabilities that would be needed for this task
 - Each capability should be one word only (no spaces or hyphens)
 - Be specific to the task requirements, not generic
 - Make the agent feel specialized and purpose-built for this task
 - Use realistic and practical capabilities
+- Do NOT include "id" fields - these will be generated server-side
 
 Return only the JSON structure, no additional text.
 `;
@@ -81,10 +82,8 @@ export async function POST(request: Request) {
       if (jsonMatch) {
         agentData = JSON.parse(jsonMatch[0]);
         
-        // Ensure the agent has a unique ID (the client will override this, but just in case)
-        if (!agentData.id) {
-          agentData.id = `agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        }
+        // Generate UUID for the agent on the server side
+        agentData.id = generateUUID();
       } else {
         throw new Error('No JSON found in response');
       }

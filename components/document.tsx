@@ -34,7 +34,12 @@ function PureDocumentToolResult({
   result,
   isReadonly,
 }: DocumentToolResultProps) {
-  const { setArtifact } = useArtifact();
+  const { artifact, setArtifact } = useArtifact();
+
+  const isCanvasStreaming =
+    result.kind === 'canvas' &&
+    artifact.documentId === result.id &&
+    artifact.status === 'streaming';
 
   return (
     <button
@@ -69,7 +74,11 @@ function PureDocumentToolResult({
       }}
     >
       <div className="text-muted-foreground mt-1">
-        {type === 'create' ? (
+        {isCanvasStreaming && type === 'create' ? (
+          <div className="animate-spin">
+            <LoaderIcon />
+          </div>
+        ) : type === 'create' ? (
           <FileIcon />
         ) : type === 'update' ? (
           <PencilEditIcon />
@@ -78,7 +87,9 @@ function PureDocumentToolResult({
         ) : null}
       </div>
       <div className="text-left">
-        {`${getActionText(type, 'past')} "${result.title}"`}
+        {isCanvasStreaming && type === 'create'
+          ? 'Generating task list…'
+          : `${getActionText(type, 'past')} "${result.title}"`}
       </div>
     </button>
   );
@@ -102,10 +113,12 @@ function PureDocumentToolCall({
 }: DocumentToolCallProps) {
   const { setArtifact } = useArtifact();
 
+  const isCanvasCreate = type === 'create' && 'kind' in args && args.kind === 'canvas';
+
   return (
     <button
       type="button"
-      className="cursor pointer w-fit border py-2 px-3 rounded-xl flex flex-row items-start justify-between gap-3"
+      className="cursor-pointer w-fit border py-2 px-3 rounded-xl flex flex-row items-start justify-between gap-3"
       onClick={(event) => {
         if (isReadonly) {
           toast.error(
@@ -142,15 +155,17 @@ function PureDocumentToolCall({
         </div>
 
         <div className="text-left">
-          {`${getActionText(type, 'present')} ${
-            type === 'create' && 'title' in args && args.title
-              ? `"${args.title}"`
-              : type === 'update' && 'description' in args
-                ? `"${args.description}"`
-                : type === 'request-suggestions'
-                  ? 'for document'
-                  : ''
-          }`}
+          {isCanvasCreate
+            ? 'Generating task list…'
+            : `${getActionText(type, 'present')} ${
+                type === 'create' && 'title' in args && args.title
+                  ? `"${args.title}"`
+                  : type === 'update' && 'description' in args
+                    ? `"${args.description}"`
+                    : type === 'request-suggestions'
+                      ? 'for document'
+                      : ''
+              }`}
         </div>
       </div>
 

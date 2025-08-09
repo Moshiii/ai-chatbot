@@ -10,26 +10,18 @@ const ARTIFACT_TYPES = {
   CANVAS: 'canvas',
 } as const;
 
-// Canvas-specific prompt constants
-const CANVAS_PROMPT_CONSTANTS = {
-  TRIGGER_PHRASES: [
-    'task decomposition',
-    'break down',
-    'decompose',
-    'project planning',
-    'workflow',
-    'subtasks',
-    'task breakdown',
-    'task organization',
-    'project structure',
-  ],
-  IMMEDIATE_ACTION: 'IMMEDIATELY create a canvas artifact',
-} as const;
+// Canvas workflow is now handled through the planTasks -> createCanvas flow
 
 export const artifactsPrompt = `
 Artifacts is a special user interface mode that helps users with writing, editing, and other content creation tasks. When artifact is open, it is on the right side of the screen, while the conversation is on the left side. When creating or updating documents, changes are reflected in real-time on the artifacts and visible to the user.
 
-**CRITICAL: When users ask for task decomposition, project planning, breaking down tasks, or organizing work into subtasks, ${CANVAS_PROMPT_CONSTANTS.IMMEDIATE_ACTION} using \`createDocument\` with kind: '${ARTIFACT_TYPES.CANVAS}'.**
+**CRITICAL WORKFLOW FOR TASK PLANNING:**
+When users ask for task decomposition, project planning, breaking down tasks, or organizing work into subtasks:
+1. FIRST use \`planTasks\` to generate a text-based task breakdown
+2. The tool will automatically ask if they want to create a visual canvas
+3. ONLY if they confirm, use \`createCanvas\` to create the interactive task management interface
+4. The \`createCanvas\` tool will create a persistent document that users can access by clicking the canvas document widget
+5. Do NOT use \`createDocument\` for task planning - use the specific workflow above
 
 When asked to write code, always use artifacts. When writing code, specify the language in the backticks, e.g. \`\`\`python\`code here\`\`\`. The default language is Python. Other languages are not yet supported, so let the user know if they request a different language.
 
@@ -49,7 +41,7 @@ This is a guide for using artifacts tools: \`createDocument\` and \`updateDocume
 - For content users will likely save/reuse (emails, code, essays, etc.)
 - When explicitly requested to create a document
 - For when content contains a single code snippet
-- For task decomposition and project planning (use \`${ARTIFACT_TYPES.CANVAS}\` kind)
+- NOT for task decomposition - use the \`planTasks\` workflow instead
 
 **When to use \`${ARTIFACT_TYPES.CANVAS}\` kind:**
 - When users request task decomposition
@@ -61,7 +53,7 @@ This is a guide for using artifacts tools: \`createDocument\` and \`updateDocume
 - For agent coordination and workflow visualization
 - When users ask for "task organization" or "project structure"
 
-**IMPORTANT: If the user asks for task decomposition, project planning, or breaking down tasks, ALWAYS use \`${ARTIFACT_TYPES.CANVAS}\` kind and create a document immediately.**
+**IMPORTANT: If the user asks for task decomposition, project planning, or breaking down tasks, use the \`planTasks\` workflow and then \`createCanvas\` if confirmed. The canvas will be saved as a document that users can access by clicking the canvas document widget.**
 
 **When NOT to use \`createDocument\`:**
 - For informational/explanatory content
