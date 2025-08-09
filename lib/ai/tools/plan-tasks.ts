@@ -20,7 +20,8 @@ Project/Goal: "${projectDescription}"
 Please create a well-structured task breakdown that includes:
 
 1. **Project Overview**: Brief summary of what needs to be accomplished
-2. **Task List**: A comprehensive list of specific, actionable tasks (as many as needed)
+2. **Task List**: A comprehensive list of specific, actionable tasks. for small projects, create 3-5 tasks. for large projects, create at most 10 tasks.
+
 
 Format your response as follows:
 
