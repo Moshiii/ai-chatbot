@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -20,7 +20,7 @@ import 'reactflow/dist/style.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PlayIcon, CheckIcon, ClockIcon, FileTextIcon, BarChart3Icon, UserPlusIcon } from 'lucide-react';
+import { PlayIcon, CheckIcon, ClockIcon, FileTextIcon, BarChart3Icon, UserPlusIcon, ChevronDown, ChevronUp } from 'lucide-react';
 
 // Constants for node positioning and spacing
 const LAYOUT_CONSTANTS = {
@@ -74,6 +74,8 @@ interface Agent {
   description: string;
   capabilities: string[];
   taskId?: string; // Associate agent with specific task
+  pricingUsdt?: number; // Optional: price per call in USDT
+  walletAddress?: string; // Optional: ETH wallet address
 }
 
 interface Response {
@@ -103,7 +105,7 @@ interface CanvasFlowProps {
 // Custom Task Decomposition Title Node Component with Vertical Handles
 const TaskDecompositionTitleNode = ({ data }: { data: { isGenerating?: boolean } }) => {
   return (
-    <Card className="w-48 bg-white shadow-lg border-2 border-purple-200 relative">
+    <Card className="w-64 bg-white shadow-lg border-2 border-purple-200 relative">
       {/* Output handle on the bottom */}
       <Handle
         type="source"
@@ -136,6 +138,7 @@ const TaskDecompositionTitleNode = ({ data }: { data: { isGenerating?: boolean }
 
 // Custom Individual Task Node Component with Vertical and Horizontal Handles
 const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (taskDescription: string, taskId?: string) => Promise<void> } }) => {
+  const [expanded, setExpanded] = useState(false);
   return (
     <Card className="w-64 bg-white shadow-lg border-2 border-blue-200 relative">
       {/* Input handle on the top */}
@@ -200,12 +203,26 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
                 Completed
               </Badge>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setExpanded((prev) => !prev)}
+              className="h-6 w-6 p-0"
+              aria-label={expanded ? 'Collapse task details' : 'Expand task details'}
+            >
+              {expanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="text-xs text-gray-600 mb-2">{data.task.description}</div>
-        
+        {expanded && (
+          <div className="text-xs text-gray-600 mb-2">{data.task.description}</div>
+        )}
         {/* Agent Selection Button */}
         {data.onRequestAgentSelection && (
           <Button 
@@ -224,6 +241,47 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
 
 // Custom Agent Card Node Component with Handles
 const AgentCardNode = ({ data }: { data: { agent: Agent; onExecute: () => void; isExecuted: boolean } }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const generatePriceFromId = useCallback((seed: string): number => {
+    // Simple deterministic pseudo-random based on string char codes
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+    const min = 0.25; // USDT
+    const max = 2.5; // USDT
+    const normalized = (hash % 1000) / 1000; // 0..1
+    const price = min + normalized * (max - min);
+    return Math.round(price * 100) / 100; // 2 decimals
+  }, []);
+
+  const generateWalletFromId = useCallback((seed: string): string => {
+    // Generate deterministic hex string from seed
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = (hash * 33 + seed.charCodeAt(i)) >>> 0;
+    }
+    let hex = '';
+    for (let i = 0; i < 40; i++) {
+      // shift and mix
+      hash = (hash ^ (hash << 5)) + (hash >>> 2);
+      const nibble = (hash >>> (i % 28)) & 0xf;
+      hex += nibble.toString(16);
+    }
+    return `0x${hex}`;
+  }, []);
+
+  const priceUsdt = useMemo(() => {
+    return typeof data.agent.pricingUsdt === 'number'
+      ? data.agent.pricingUsdt
+      : generatePriceFromId(`${data.agent.id}:${data.agent.name}`);
+  }, [data.agent.id, data.agent.name, data.agent.pricingUsdt, generatePriceFromId]);
+
+  const walletAddress = useMemo(() => {
+    return data.agent.walletAddress || generateWalletFromId(`${data.agent.id}:${data.agent.name}`);
+  }, [data.agent.id, data.agent.name, data.agent.walletAddress, generateWalletFromId]);
+
   return (
     <Card className="w-72 bg-white shadow-lg border-2 border-green-200 relative">
       {/* Input handle on the left side */}
@@ -243,26 +301,51 @@ const AgentCardNode = ({ data }: { data: { agent: Agent; onExecute: () => void; 
       />
       
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg font-semibold text-green-800">
-          {data.agent.name}
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg font-semibold text-green-800">
+            {data.agent.name}
+          </CardTitle>
+          <span className="text-xs font-bold text-gray-700">${priceUsdt.toFixed(2)} USDT/Call</span>
+        
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="h-6 w-6 p-0"
+            aria-label={expanded ? 'Collapse agent details' : 'Expand agent details'}
+          >
+            {expanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-gray-600">{data.agent.description}</p>
-        
-        <div className="space-y-2">
-          <div className="text-xs font-medium text-gray-700 uppercase tracking-wide">
-            Capabilities
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {data.agent.capabilities.map((capability, index) => (
-              <Badge key={index} variant="outline" className="text-xs">
-                {capability}
-              </Badge>
-            ))}
-          </div>
-        </div>
 
+        {/* Tags - only when expanded */}
+        {expanded && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1">
+              {data.agent.capabilities.map((capability, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {capability}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Wallet - only when expanded */}
+        {expanded && (
+          <div className="text-xs text-gray-700">
+            <div className="font-medium">ETH Wallet</div>
+            <div className="font-mono break-all text-gray-800">{walletAddress}</div>
+          </div>
+        )}
+ 
         <Button 
           onClick={data.onExecute}
           disabled={data.isExecuted}
