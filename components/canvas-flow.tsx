@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PlayIcon, CheckIcon, ClockIcon, FileTextIcon, BarChart3Icon, UserPlusIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 // Constants for node positioning and spacing
 const LAYOUT_CONSTANTS = {
@@ -240,7 +241,7 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
 };
 
 // Custom Agent Card Node Component with Handles
-const AgentCardNode = ({ data }: { data: { agent: Agent; onExecute: () => void; isExecuted: boolean } }) => {
+const AgentCardNode = ({ data }: { data: { agent: Agent; onRequestTransaction: (agent: Agent, priceUsdt: number, walletAddress: string) => void; isExecuted: boolean } }) => {
   const [expanded, setExpanded] = useState(false);
 
   const generatePriceFromId = useCallback((seed: string): number => {
@@ -347,7 +348,7 @@ const AgentCardNode = ({ data }: { data: { agent: Agent; onExecute: () => void; 
         )}
  
         <Button 
-          onClick={data.onExecute}
+          onClick={() => data.onRequestTransaction(data.agent, priceUsdt, walletAddress)}
           disabled={data.isExecuted}
           className={`w-full ${
             data.isExecuted 
@@ -458,6 +459,33 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   
+  // Transaction confirmation dialog state
+  const [isTxDialogOpen, setIsTxDialogOpen] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState<null | { agent: Agent; priceUsdt: number; walletAddress: string }>(null);
+  const [showAdvancedTxDetails, setShowAdvancedTxDetails] = useState(false);
+
+  // Web3-like transaction display defaults (can be made configurable later)
+  const networkName = 'Ethereum Mainnet';
+  const tokenSymbol = 'USDT (ERC20)';
+  const estimatedGasLimit = 65000; // simple transfer estimate
+  const gasPriceGwei = 15; // example gas price
+  const estimatedGasEth = useMemo(() => (estimatedGasLimit * gasPriceGwei) / 1e9, [estimatedGasLimit, gasPriceGwei]);
+  const estimatedConfirmation = '~15s';
+  const shortenAddress = (addr: string) => (addr.length > 10 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr);
+ 
+  const openTransactionDialog = useCallback((agent: Agent, priceUsdt: number, walletAddress: string) => {
+    setPendingTransaction({ agent, priceUsdt, walletAddress });
+    setIsTxDialogOpen(true);
+    setShowAdvancedTxDetails(false);
+  }, []);
+
+  const confirmAndExecute = useCallback(() => {
+    if (!pendingTransaction) return;
+    onExecuteAgent(pendingTransaction.agent.id);
+    setIsTxDialogOpen(false);
+    setPendingTransaction(null);
+  }, [onExecuteAgent, pendingTransaction]);
+  
   // Store node positions to persist them during updates
   const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
@@ -514,7 +542,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         position: savedPosition || defaultPosition,
         data: { 
           agent,
-          onExecute: () => onExecuteAgent(agent.id),
+          onRequestTransaction: openTransactionDialog,
           isExecuted
         },
       });
@@ -668,7 +696,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
     console.log('Total edges created:', newEdges.length);
     console.log('All edge IDs:', newEdges.map(edge => edge.id));
     setEdges(newEdges);
-  }, [tasks, agents, responses, summary, onExecuteAgent, onSummarize, setNodes, setEdges, isGenerating]);
+  }, [tasks, agents, responses, summary, onExecuteAgent, onSummarize, setNodes, setEdges, isGenerating, openTransactionDialog]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -692,6 +720,72 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         <Controls />
         <Background color="#aaa" gap={16} />
       </ReactFlow>
+
+      {/* Transaction Confirmation Dialog */}
+      <AlertDialog open={isTxDialogOpen} onOpenChange={setIsTxDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Transaction</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingTransaction ? (
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-3 gap-x-4 gap-y-1">
+                    <div className="text-muted-foreground">Network</div>
+                    <div className="col-span-2">{networkName}</div>
+
+                    <div className="text-muted-foreground">From</div>
+                    <div className="col-span-2">Your wallet</div>
+
+                    <div className="text-muted-foreground">To</div>
+                    <div className="col-span-2 break-all">{shortenAddress(pendingTransaction.walletAddress)}</div>
+
+                    <div className="text-muted-foreground">Token</div>
+                    <div className="col-span-2">{tokenSymbol}</div>
+
+                    <div className="text-muted-foreground">Amount</div>
+                    <div className="col-span-2">${pendingTransaction.priceUsdt.toFixed(2)} USDT</div>
+
+                    <div className="text-muted-foreground">Network fee</div>
+                    <div className="col-span-2">~{estimatedGasEth.toFixed(6)} ETH ({gasPriceGwei} gwei × {estimatedGasLimit} gas)</div>
+
+                    <div className="text-muted-foreground">Est. time</div>
+                    <div className="col-span-2">{estimatedConfirmation}</div>
+
+                    <div className="text-muted-foreground">Total</div>
+                    <div className="col-span-2">${pendingTransaction.priceUsdt.toFixed(2)} USDT + network fee</div>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
+                      onClick={() => setShowAdvancedTxDetails((v) => !v)}
+                    >
+                      {showAdvancedTxDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      {showAdvancedTxDetails ? 'Hide advanced details' : 'Show advanced details'}
+                    </button>
+                    {showAdvancedTxDetails && (
+                      <div className="mt-2 rounded-md border p-3 space-y-1 text-xs">
+                        <div><span className="font-medium">Agent:</span> {pendingTransaction.agent.name}</div>
+                        <div><span className="font-medium">Agent ID:</span> {pendingTransaction.agent.id}</div>
+                        <div className="break-all"><span className="font-medium">Recipient:</span> {pendingTransaction.walletAddress}</div>
+                        <div><span className="font-medium">Method:</span> executeAgent({pendingTransaction.agent.id})</div>
+                        <div className="text-muted-foreground">You will be asked to confirm this transaction in your wallet.</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                'Review the transaction details before proceeding.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setIsTxDialogOpen(false); setPendingTransaction(null); }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAndExecute}>Confirm and Execute</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 } 
