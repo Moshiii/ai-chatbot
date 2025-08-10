@@ -71,6 +71,7 @@ export async function createGuestUser() {
     return await db.insert(user).values({ email, password }).returning({
       id: user.id,
       email: user.email,
+      creditBalance: user.creditBalance,
     });
   } catch (error) {
     throw new ChatSDKError(

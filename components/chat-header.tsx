@@ -72,6 +72,13 @@ function PureChatHeader({
       )}
 
       <div className="order-4 md:ml-auto ml-auto flex gap-2">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-950 rounded-md border border-green-200 dark:border-green-800">
+          <span className="text-sm font-medium text-green-700 dark:text-green-300">Balance:</span>
+          <span className="text-sm font-bold text-green-800 dark:text-green-200">
+            {session.user.creditBalance || '0.00'} USDT
+          </span>
+        </div>
+        
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

@@ -83,6 +83,12 @@ export default function ProfilePage() {
                     {user.type === 'guest' ? 'Guest' : 'Regular'}
                   </Badge>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-muted-foreground">Credit Balance:</span>
+                  <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                    {user.creditBalance || '0.00'} USDT
+                  </Badge>
+                </div>
                 {user.name && (
                   <div className="flex justify-between items-center">
                     <span className="font-medium text-muted-foreground">Name:</span>
