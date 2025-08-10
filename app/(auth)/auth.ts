@@ -5,6 +5,7 @@ import { createGuestUser, getUser } from '@/lib/db/queries';
 import { authConfig } from './auth.config';
 import { DUMMY_PASSWORD } from '@/lib/constants';
 import type { DefaultJWT } from 'next-auth/jwt';
+import GitHub from "next-auth/providers/github"
 
 export type UserType = 'guest' | 'regular';
 
@@ -38,6 +39,10 @@ export const {
 } = NextAuth({
   ...authConfig,
   providers: [
+    GitHub({
+      clientId: process.env.AUTH_GITHUB_ID!,
+      clientSecret: process.env.AUTH_GITHUB_SECRET!,
+    }),
     Credentials({
       credentials: {},
       async authorize({ email, password }: any) {
@@ -87,6 +92,13 @@ export const {
       }
 
       return session;
+    },
+    async signIn({ user, account }) {
+      // Ensure GitHub users get the 'regular' type
+      if (account?.provider === 'github') {
+        user.type = 'regular';
+      }
+      return true;
     },
   },
 });
