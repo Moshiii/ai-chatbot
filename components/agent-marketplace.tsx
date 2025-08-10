@@ -113,7 +113,7 @@ export default function AgentMarketplace() {
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 overflow-hidden rounded-md bg-muted">
                   <Image
-                    src={agent.avatar ?? '/images/demo-thumbnail.png'}
+                    src={agent.avatar ?? `https://avatar.vercel.sh/${agent.name}`}
                     alt={`${agent.name} avatar`}
                     width={40}
                     height={40}
