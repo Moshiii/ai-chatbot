@@ -89,13 +89,6 @@ export default function AgentMarketplace() {
       <div className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto w-full max-w-5xl px-4 md:px-6 py-3">
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => router.back()}
-              className="h-10"
-            >
-              ← Go Back
-            </Button>
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}

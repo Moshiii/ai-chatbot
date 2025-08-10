@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronUp } from 'lucide-react';
+import { ChevronUp, User as UserIcon } from 'lucide-react';
 import Image from 'next/image';
 import type { User } from 'next-auth';
 import { signOut, useSession } from 'next-auth/react';
@@ -71,6 +71,19 @@ export function SidebarUserNav({ user }: { user: User }) {
             side="top"
             className="w-[--radix-popper-anchor-width]"
           >
+            {!isGuest && (
+              <>
+                <DropdownMenuItem
+                  data-testid="user-nav-item-profile"
+                  className="cursor-pointer"
+                  onSelect={() => router.push('/profile')}
+                >
+                  <UserIcon className="mr-2 h-4 w-4" />
+                  View Profile
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem
               data-testid="user-nav-item-theme"
               className="cursor-pointer"
