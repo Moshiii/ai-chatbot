@@ -6,6 +6,9 @@ import { memo } from 'react';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import type { VisibilityType } from './visibility-selector';
 import type { ChatMessage } from '@/lib/types';
+import { useSession } from 'next-auth/react';
+import { guestRegex } from '@/lib/constants';
+import { useRouter } from 'next/navigation';
 
 // Constants for suggested actions
 const SUGGESTED_ACTIONS = [
@@ -42,6 +45,26 @@ function PureSuggestedActions({
   sendMessage,
   selectedVisibilityType,
 }: SuggestedActionsProps) {
+  const { data: session } = useSession();
+  const router = useRouter();
+  
+  const isGuest = guestRegex.test(session?.user?.email ?? '');
+
+  const handleSuggestedAction = async (action: string) => {
+    // Redirect guest users to login when they try to use suggestions
+    if (isGuest) {
+      router.push('/login');
+      return;
+    }
+
+    window.history.replaceState({}, '', `/chat/${chatId}`);
+
+    sendMessage({
+      role: 'user',
+      parts: [{ type: 'text', text: action }],
+    });
+  };
+
   return (
     <div
       data-testid="suggested-actions"
@@ -58,14 +81,7 @@ function PureSuggestedActions({
         >
           <Button
             variant="ghost"
-            onClick={async () => {
-              window.history.replaceState({}, '', `/chat/${chatId}`);
-
-              sendMessage({
-                role: 'user',
-                parts: [{ type: 'text', text: suggestedAction.action }],
-              });
-            }}
+            onClick={() => handleSuggestedAction(suggestedAction.action)}
             className="text-left border rounded-xl px-4 py-3.5 text-sm flex-1 gap-1 sm:flex-col w-full h-auto justify-start items-start"
           >
             <span className="font-medium">{suggestedAction.title}</span>

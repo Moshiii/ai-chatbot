@@ -1,9 +1,7 @@
-import { compare } from 'bcrypt-ts';
 import NextAuth, { type DefaultSession } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { createGuestUser, getUser } from '@/lib/db/queries';
+import { createGuestUser } from '@/lib/db/queries';
 import { authConfig } from './auth.config';
-import { DUMMY_PASSWORD } from '@/lib/constants';
 import type { DefaultJWT } from 'next-auth/jwt';
 import GitHub from "next-auth/providers/github"
 
@@ -34,6 +32,11 @@ declare module 'next-auth/jwt' {
   }
 }
 
+// Validate required environment variables
+if (!process.env.AUTH_GITHUB_ID || !process.env.AUTH_GITHUB_SECRET) {
+  throw new Error('Missing required GitHub OAuth environment variables: AUTH_GITHUB_ID and AUTH_GITHUB_SECRET');
+}
+
 export const {
   handlers: { GET, POST },
   auth,
@@ -43,32 +46,8 @@ export const {
   ...authConfig,
   providers: [
     GitHub({
-      clientId: process.env.AUTH_GITHUB_ID!,
-      clientSecret: process.env.AUTH_GITHUB_SECRET!,
-    }),
-    Credentials({
-      credentials: {},
-      async authorize({ email, password }: any) {
-        const users = await getUser(email);
-
-        if (users.length === 0) {
-          await compare(password, DUMMY_PASSWORD);
-          return null;
-        }
-
-        const [user] = users;
-
-        if (!user.password) {
-          await compare(password, DUMMY_PASSWORD);
-          return null;
-        }
-
-        const passwordsMatch = await compare(password, user.password);
-
-        if (!passwordsMatch) return null;
-
-        return { ...user, type: 'regular' };
-      },
+      clientId: process.env.AUTH_GITHUB_ID,
+      clientSecret: process.env.AUTH_GITHUB_SECRET,
     }),
     Credentials({
       id: 'guest',
@@ -104,6 +83,17 @@ export const {
         user.type = 'regular';
       }
       return true;
+    },
+    async redirect({ url, baseUrl }) {
+      // After successful login, redirect to the main chat page
+      if (url.startsWith(baseUrl)) {
+        return `${baseUrl}/`;
+      }
+      // Allows relative callback URLs
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // Allows callback URLs on the same origin
+      if (new URL(url).origin === baseUrl) return url;
+      return baseUrl;
     },
   },
 });

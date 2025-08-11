@@ -11,17 +11,28 @@ import { useSidebar } from './ui/sidebar';
 import { memo } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import type { Session } from 'next-auth';
+import { guestRegex } from '@/lib/constants';
+
+interface HeaderProps {
+  session: Session;
+  showNewChatButton?: boolean;
+  showBalance?: boolean;
+  showNavigation?: boolean;
+  children?: React.ReactNode;
+}
 
 function PurePageHeader({
   session,
   showNewChatButton = false,
-}: {
-  session: Session;
-  showNewChatButton?: boolean;
-}) {
+  showBalance = true,
+  showNavigation = true,
+  children,
+}: HeaderProps) {
   const router = useRouter();
   const { open } = useSidebar();
   const { width: windowWidth } = useWindowSize();
+  
+  const isGuest = guestRegex.test(session?.user?.email ?? '');
 
   return (
     <header className="flex sticky top-0 bg-background py-1.5 items-center px-2 md:px-2 gap-2">
@@ -46,53 +57,65 @@ function PurePageHeader({
         </Tooltip>
       )}
 
-      <div className="order-4 md:ml-auto ml-auto flex gap-2">
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-950 rounded-md border border-green-200 dark:border-green-800">
-          <span className="text-sm font-medium text-green-700 dark:text-green-300">Balance:</span>
-          <span className="text-sm font-bold text-green-800 dark:text-green-200">
-            {session.user.creditBalance || '0.00'} USDT
-          </span>
+      {/* Custom content slot for chat-specific components */}
+      {children}
+
+      {showNavigation && (
+        <div className="order-4 md:ml-auto ml-auto flex gap-2">
+          {/* Only show balance for authenticated users when enabled */}
+          {showBalance && !isGuest && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-950 rounded-md border border-green-200 dark:border-green-800">
+              <span className="text-sm font-medium text-green-700 dark:text-green-300">Balance:</span>
+              <span className="text-sm font-bold text-green-800 dark:text-green-200">
+                {session.user.creditBalance || '0.00'} USDT
+              </span>
+            </div>
+          )}
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                className="h-fit py-1.5 px-3"
+                asChild
+              >
+                <Link href="/">Chat</Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Go to Messages</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                className="h-fit py-1.5 px-3"
+                asChild
+              >
+                <Link href="/marketplace">Marketplace</Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Explore Agent Marketplace</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                className="h-fit py-1.5 px-3"
+                asChild
+              >
+                <Link href={isGuest ? "/login" : "/profile"}>
+                  {isGuest ? "Login" : "Profile"}
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {isGuest ? "Login to your account" : "View Profile"}
+            </TooltipContent>
+          </Tooltip>
         </div>
-        
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="secondary"
-              className="h-fit py-1.5 px-3"
-              asChild
-            >
-              <Link href="/">Chat</Link>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Go to Messages</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="secondary"
-              className="h-fit py-1.5 px-3"
-              asChild
-            >
-              <Link href="/marketplace">Marketplace</Link>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Explore Agent Marketplace</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="secondary"
-              className="h-fit py-1.5 px-3"
-              asChild
-            >
-              <Link href="/profile">Profile</Link>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>View Profile</TooltipContent>
-        </Tooltip>
-      </div>
+      )}
     </header>
   );
 }

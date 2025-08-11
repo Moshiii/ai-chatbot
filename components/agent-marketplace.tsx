@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { useSession } from 'next-auth/react';
+import { guestRegex } from '@/lib/constants';
 
 interface AgentItem {
   id: string;
@@ -75,6 +77,9 @@ const MOCK_AGENTS: AgentItem[] = [
 export default function AgentMarketplace() {
   const [query, setQuery] = useState('');
   const router = useRouter();
+  const { data: session } = useSession();
+  
+  const isGuest = guestRegex.test(session?.user?.email ?? '');
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -83,6 +88,15 @@ export default function AgentMarketplace() {
       [a.name, a.description, ...(a.tags ?? [])].some((t) => t.toLowerCase().includes(q)),
     );
   }, [query]);
+
+  const handleAddAgent = (agentId: string) => {
+    if (isGuest) {
+      router.push('/login');
+    } else {
+      // TODO: Implement add agent functionality for authenticated users
+      console.log('Adding agent:', agentId);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -129,7 +143,14 @@ export default function AgentMarketplace() {
               <div className="mt-auto pt-2">
                 <div className="flex items-center justify-between gap-2">
                   <Button size="sm" className="h-8">View</Button>
-                  <Button size="sm" variant="secondary" className="h-8">Add</Button>
+                  <Button 
+                    size="sm" 
+                    variant="secondary" 
+                    className="h-8"
+                    onClick={() => handleAddAgent(agent.id)}
+                  >
+                    {isGuest ? 'Login to Add' : 'Add'}
+                  </Button>
                 </div>
               </div>
             </Card>

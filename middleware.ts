@@ -33,8 +33,15 @@ export async function middleware(request: NextRequest) {
 
   const isGuest = guestRegex.test(token?.email ?? '');
 
-  if (token && !isGuest && ['/login', '/register'].includes(pathname)) {
+  // Redirect authenticated users away from login page
+  if (token && !isGuest && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  // Allow guest users to access marketplace, chat, and profile pages
+  // but they will be redirected to login when trying to perform actions
+  if (isGuest && (pathname === '/marketplace' || pathname === '/profile')) {
+    return NextResponse.next();
   }
 
   return NextResponse.next();
@@ -46,8 +53,8 @@ export const config = {
     '/chat/:id',
     '/api/:path*',
     '/login',
-    '/register',
-
+    '/marketplace',
+    '/profile',
     /*
      * Match all request paths except for the ones starting with:
      * - _next/static (static files)

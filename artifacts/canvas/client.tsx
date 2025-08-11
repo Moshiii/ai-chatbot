@@ -1,7 +1,7 @@
 import { Artifact } from '@/components/create-artifact';
 import { CanvasFlow } from '../../components/canvas-flow';
 import { DocumentSkeleton } from '@/components/document-skeleton';
-import { useEffect, useRef } from 'react';
+import { useEffect, } from 'react';
 import {
   ClockRewind,
   CopyIcon,
@@ -59,7 +59,7 @@ const requestAgentSelection = async (taskDescription: string) => {
 // Helper function to truncate agent names
 const truncateAgentName = (name: string): string => {
   if (name.length > UI_CONSTRAINTS.AGENT_NAME_MAX_LENGTH) {
-    return name.substring(0, UI_CONSTRAINTS.AGENT_NAME_TRUNCATE_LENGTH) + '...';
+    return `${name.substring(0, UI_CONSTRAINTS.AGENT_NAME_TRUNCATE_LENGTH)}...`;
   }
   return name;
 };
@@ -69,16 +69,16 @@ const generateResponseContent = (agentName: string, capabilities: string[]): str
   const baseContent = `${agentName} execution completed successfully. `;
   
   if (capabilities.includes('Web Scraping')) {
-    return baseContent + `Collected data from 15 different sources including APIs, databases, and web pages. Found 2,847 relevant data points with 98% accuracy. Data has been validated and stored in the central repository.`;
+    return `${baseContent}Collected data from 15 different sources including APIs, databases, and web pages. Found 2,847 relevant data points with 98% accuracy. Data has been validated and stored in the central repository.`;
   } else if (capabilities.includes('Statistical Analysis')) {
-    return baseContent + `Processed 2,847 data points through statistical analysis pipeline. Identified 12 significant correlations and 3 outlier patterns. Generated 8 visualization charts and statistical reports.`;
+    return `${baseContent}Processed 2,847 data points through statistical analysis pipeline. Identified 12 significant correlations and 3 outlier patterns. Generated 8 visualization charts and statistical reports.`;
   } else if (capabilities.includes('ML Algorithms')) {
-    return baseContent + `Applied machine learning algorithms to detect patterns. Achieved 94% accuracy in pattern recognition. Identified 7 key trends and 2 anomaly clusters. Model performance validated with cross-validation.`;
+    return `${baseContent}Applied machine learning algorithms to detect patterns. Achieved 94% accuracy in pattern recognition. Identified 7 key trends and 2 anomaly clusters. Model performance validated with cross-validation.`;
   } else if (capabilities.includes('Report Writing')) {
-    return baseContent + `Synthesized all findings into comprehensive report. Created executive summary, detailed analysis, and actionable recommendations. Report includes 15 visualizations and 8 appendices.`;
+    return `${baseContent}Synthesized all findings into comprehensive report. Created executive summary, detailed analysis, and actionable recommendations. Report includes 15 visualizations and 8 appendices.`;
   }
   
-  return baseContent + `Task completed with high efficiency. All objectives met within specified parameters.`;
+  return `${baseContent}Task completed with high efficiency. All objectives met within specified parameters.`;
 };
 
 // Helper function to generate summary content
@@ -340,7 +340,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
 
     // Save metadata changes to document content
     useEffect(() => {
-      if (metadata && metadata.tasks && metadata.tasks.length > 0 && onSaveContent) {
+      if (metadata?.tasks && metadata.tasks.length > 0 && onSaveContent) {
         const dataToSave = {
           tasks: metadata.tasks,
           agents: metadata.agents || [],

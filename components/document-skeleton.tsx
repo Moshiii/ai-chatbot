@@ -1,6 +1,6 @@
 'use client';
 
-import { ArtifactKind } from './artifact';
+import type { ArtifactKind } from './artifact';
 
 // Constants for artifact types
 const ARTIFACT_TYPES = {

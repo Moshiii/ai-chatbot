@@ -28,6 +28,9 @@ import { ArrowDown } from 'lucide-react';
 import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import type { VisibilityType } from './visibility-selector';
 import type { Attachment, ChatMessage } from '@/lib/types';
+import { useSession } from 'next-auth/react';
+import { guestRegex } from '@/lib/constants';
+import { useRouter } from 'next/navigation';
 
 function PureMultimodalInput({
   chatId,
@@ -57,7 +60,13 @@ function PureMultimodalInput({
   selectedVisibilityType: VisibilityType;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { width } = useWindowSize();
+  const { data: session } = useSession();
+  const router = useRouter();
+  
+  const isGuest = guestRegex.test(session?.user?.email ?? '');
+  const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -101,14 +110,32 @@ function PureMultimodalInput({
   }, [input, setLocalStorageInput]);
 
   const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(event.target.value);
+    // Allow guest users to type messages
+    const value = event.target.value;
+    setInput(value);
     adjustHeight();
   };
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (status === 'submitted') {
+        stop();
+      } else {
+        submitForm();
+      }
+    }
+  };
 
   const submitForm = useCallback(() => {
+    // Redirect guest users to login when they try to submit
+    if (isGuest) {
+      router.push('/login');
+      return;
+    }
+
+    if (!input.trim() && attachments.length === 0) return;
+
     window.history.replaceState({}, '', `/chat/${chatId}`);
 
     sendMessage({
@@ -127,10 +154,10 @@ function PureMultimodalInput({
       ],
     });
 
+    setInput('');
     setAttachments([]);
     setLocalStorageInput('');
     resetHeight();
-    setInput('');
 
     if (width && width > 768) {
       textareaRef.current?.focus();
@@ -144,9 +171,21 @@ function PureMultimodalInput({
     setLocalStorageInput,
     width,
     chatId,
+    isGuest,
+    router,
   ]);
 
+  // Custom sendMessage wrapper that checks for guest users
+  const handleSendMessage = useCallback(async (message: any) => {
+    if (isGuest) {
+      router.push('/login');
+      return;
+    }
+    return sendMessage(message);
+  }, [isGuest, router, sendMessage]);
+
   const uploadFile = async (file: File) => {
+    // Allow guest users to select files but redirect on submit
     const formData = new FormData();
     formData.append('file', file);
 
@@ -175,6 +214,7 @@ function PureMultimodalInput({
 
   const handleFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
+      // Allow guest users to select files but redirect on submit
       const files = Array.from(event.target.files || []);
 
       setUploadQueue(files.map((file) => file.name));
@@ -238,7 +278,7 @@ function PureMultimodalInput({
         attachments.length === 0 &&
         uploadQueue.length === 0 && (
           <SuggestedActions
-            sendMessage={sendMessage}
+            sendMessage={handleSendMessage}
             chatId={chatId}
             selectedVisibilityType={selectedVisibilityType}
           />
@@ -262,7 +302,7 @@ function PureMultimodalInput({
             <PreviewAttachment key={attachment.url} attachment={attachment} />
           ))}
 
-          {uploadQueue.map((filename) => (
+          {uploadQueue.map((filename: string) => (
             <PreviewAttachment
               key={filename}
               attachment={{
@@ -277,48 +317,37 @@ function PureMultimodalInput({
       )}
 
       <Textarea
-        data-testid="multimodal-input"
         ref={textareaRef}
-        placeholder="Send a message..."
         value={input}
         onChange={handleInput}
+        onKeyDown={handleKeyDown}
         className={cx(
           'min-h-[24px] max-h-[calc(75dvh)] overflow-hidden resize-none rounded-2xl !text-base bg-muted pb-10 dark:border-zinc-700',
+          'border-0 focus:ring-2 focus:ring-ring focus:ring-offset-0',
+          'placeholder:text-muted-foreground',
           className,
         )}
+        placeholder="Type a message..."
         rows={2}
         autoFocus
-        onKeyDown={(event) => {
-          if (
-            event.key === 'Enter' &&
-            !event.shiftKey &&
-            !event.nativeEvent.isComposing
-          ) {
-            event.preventDefault();
-
-            if (status !== 'ready') {
-              toast.error('Please wait for the model to finish its response!');
-            } else {
-              submitForm();
-            }
-          }
-        }}
       />
 
-      <div className="absolute bottom-0 p-2 w-fit flex flex-row justify-start">
-        <AttachmentsButton fileInputRef={fileInputRef} status={status} />
-      </div>
-
-      <div className="absolute bottom-0 right-0 p-2 w-fit flex flex-row justify-end">
-        {status === 'submitted' ? (
-          <StopButton stop={stop} setMessages={setMessages} />
-        ) : (
-          <SendButton
-            input={input}
-            submitForm={submitForm}
-            uploadQueue={uploadQueue}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <PureAttachmentsButton
+            fileInputRef={fileInputRef}
+            status={status}
           />
-        )}
+          {status === 'submitted' && (
+            <PureStopButton stop={stop} setMessages={setMessages} />
+          )}
+        </div>
+
+        <PureSendButton
+          submitForm={submitForm}
+          input={input}
+          uploadQueue={uploadQueue}
+        />
       </div>
     </div>
   );

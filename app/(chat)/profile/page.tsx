@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/page-header';
 import Image from 'next/image';
 import { useEffect } from 'react';
@@ -22,17 +21,12 @@ export default function ProfilePage() {
   
   if (status === 'loading') {
     return (
-      <>
-        <PageHeader session={session!} />
-        <div className="container mx-auto py-8 px-4 max-w-2xl">
-          <div className="space-y-6">
-            <div className="text-center">
-              <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
-              <p className="text-muted-foreground">Loading...</p>
-            </div>
-          </div>
+      <div className="container mx-auto py-8 px-4 max-w-2xl">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
+          <p className="text-muted-foreground">Loading...</p>
         </div>
-      </>
+      </div>
     );
   }
   
