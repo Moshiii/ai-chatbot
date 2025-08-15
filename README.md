@@ -60,3 +60,23 @@ pnpm dev
 ```
 
 Your app template should now be running on [localhost:3000](http://localhost:3000).
+
+### Optional: Enable A2A Python agent
+
+To route chat requests to a Python A2A agent via the custom provider:
+
+1. Install the SDK in your project:
+
+```bash
+pnpm add @a2a-js/sdk
+```
+
+2. Set environment variables:
+
+```bash
+ENABLE_A2A=true
+A2A_AGENT_URL=http://localhost:8000
+NEXT_PUBLIC_ENABLE_A2A=true
+```
+
+3. Restart the dev server. You will see a model option "Python Agent (A2A)" in the model selector. Selecting it will send chat traffic to your Python agent at `A2A_AGENT_URL`. Tool-calls are disabled for this model.

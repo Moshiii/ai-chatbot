@@ -292,18 +292,40 @@ export async function saveDocument({
   userId: string;
 }) {
   try {
-    return await db
-      .insert(document)
-      .values({
-        id,
-        title,
-        kind,
-        content,
-        userId,
-        createdAt: new Date(),
-      })
-      .returning();
+    // Check if document with this id already exists
+    const existing = await db
+      .select()
+      .from(document)
+      .where(eq(document.id, id))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Update existing document
+      return await db
+        .update(document)
+        .set({
+          title,
+          content,
+          kind,
+        })
+        .where(eq(document.id, id))
+        .returning();
+    } else {
+      // Insert new document
+      return await db
+        .insert(document)
+        .values({
+          id,
+          title,
+          kind,
+          content,
+          userId,
+          createdAt: new Date(),
+        })
+        .returning();
+    }
   } catch (error) {
+    console.error('Database error in saveDocument:', error);
     throw new ChatSDKError('bad_request:database', 'Failed to save document');
   }
 }

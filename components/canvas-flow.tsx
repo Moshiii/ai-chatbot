@@ -20,46 +20,47 @@ import 'reactflow/dist/style.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PlayIcon, CheckIcon, ClockIcon, FileTextIcon, BarChart3Icon, UserPlusIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { PlayIcon, CheckIcon, ClockIcon, FileTextIcon, BarChart3Icon, UserPlusIcon, ChevronDown, ChevronUp, RocketIcon } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
-// Constants for node positioning and spacing
-const LAYOUT_CONSTANTS = {
-  VERTICAL_SPACING: {
-    TASKS: 200,
-    AGENTS_RESPONSES: 250,
-    SUMMARY: 150,
+// Layout configuration for node positioning
+const LAYOUT = {
+  SPACING: {
+    VERTICAL: {
+      TASKS: 200,
+      AGENTS: 250,
+      SUMMARY_OFFSET: 150,
+    },
+    HORIZONTAL: {
+      TASK_TO_AGENT: 400,
+      AGENT_TO_RESPONSE: 400,
+    },
   },
-  HORIZONTAL_SPACING: {
-    TASKS_TO_AGENTS: 400,
-    AGENTS_TO_RESPONSES: 400,
-  },
-  INITIAL_POSITIONS: {
+  INITIAL: {
     TITLE: { x: 50, y: 50 },
-    FIRST_TASK: { x: 50, y: 200 },
-    FIRST_AGENT: { x: 450, y: 200 },
-    FIRST_RESPONSE: { x: 850, y: 200 },
+    TASK: { x: 50, y: 200 },
+    AGENT: { x: 450, y: 200 },
+    RESPONSE: { x: 850, y: 200 },
   },
 } as const;
 
-// Constants for edge styling
-const EDGE_STYLES = {
-  TASK_CHAIN: { stroke: '#3b82f6', strokeWidth: 3 },
-  TASK_TO_SUMMARY: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' },
-  TASK_TO_AGENT: { stroke: '#10b981', strokeWidth: 3, strokeDasharray: '3,3' },
-  AGENT_TO_RESPONSE: { stroke: '#f59e0b', strokeWidth: 3 },
-  TITLE_TO_TASK: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' },
-} as const;
-
-// Constants for handle styling
-const HANDLE_STYLES = {
-  TITLE_OUTPUT: { background: '#8b5cf6', width: '12px', height: '12px' },
-  TASK_INPUT: { background: '#8b5cf6', width: '12px', height: '12px' },
-  TASK_OUTPUT: { background: '#3b82f6', width: '12px', height: '12px' },
-  AGENT_INPUT: { background: '#3b82f6', width: '12px', height: '12px' },
-  AGENT_OUTPUT: { background: '#f59e0b', width: '12px', height: '12px' },
-  RESPONSE_INPUT: { background: '#f59e0b', width: '12px', height: '12px' },
-  SUMMARY_INPUT: { background: '#8b5cf6', width: '12px', height: '12px' },
+// Visual styling configuration
+const STYLES = {
+  EDGES: {
+    TASK_CHAIN: { stroke: '#3b82f6', strokeWidth: 3 },
+    TASK_TO_SUMMARY: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' },
+    TASK_TO_AGENT: { stroke: '#10b981', strokeWidth: 3, strokeDasharray: '3,3' },
+    AGENT_TO_RESPONSE: { stroke: '#f59e0b', strokeWidth: 3 },
+    TITLE_TO_TASK: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' },
+  },
+  HANDLES: {
+    DEFAULT: { width: '12px', height: '12px' },
+    COLORS: {
+      PURPLE: '#8b5cf6',
+      BLUE: '#3b82f6',
+      ORANGE: '#f59e0b',
+    },
+  },
 } as const;
 
 interface Task {
@@ -98,9 +99,11 @@ interface CanvasFlowProps {
   responses: Response[];
   summary: Summary | null;
   onExecuteAgent: (agentId: string) => void;
+  onExecuteAllAgents: () => void;
   onSummarize: () => void;
   onRequestAgentSelection?: (taskDescription: string, taskId?: string) => Promise<void>;
   isGenerating?: boolean;
+  allAgentsExecuted?: boolean;
 }
 
 // Custom Task Decomposition Title Node Component with Vertical Handles
@@ -112,7 +115,7 @@ const TaskDecompositionTitleNode = ({ data }: { data: { isGenerating?: boolean }
         type="source"
         position={Position.Bottom}
         id="task-decomposition-title-output"
-        style={HANDLE_STYLES.TITLE_OUTPUT}
+        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.PURPLE }}
       />
       
       <CardHeader className="pb-2">
@@ -142,36 +145,32 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
   const [expanded, setExpanded] = useState(false);
   return (
     <Card className="w-64 bg-white shadow-lg border-2 border-blue-200 relative">
-      {/* Input handle on the top */}
+      {/* Input handles */}
       <Handle
         type="target"
         position={Position.Top}
         id={`task-${data.task.id}-input-top`}
-        style={HANDLE_STYLES.TASK_INPUT}
+        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.PURPLE }}
       />
-      
-      {/* Input handle on the left side */}
       <Handle
         type="target"
         position={Position.Left}
         id={`task-${data.task.id}-input-left`}
-        style={HANDLE_STYLES.TASK_INPUT}
+        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.PURPLE }}
       />
       
-      {/* Output handle on the bottom */}
+      {/* Output handles */}
       <Handle
         type="source"
         position={Position.Bottom}
         id={`task-${data.task.id}-output-bottom`}
-        style={HANDLE_STYLES.TASK_OUTPUT}
+        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.BLUE }}
       />
-      
-      {/* Output handle on the right side */}
       <Handle
         type="source"
         position={Position.Right}
         id={`task-${data.task.id}-output-right`}
-        style={HANDLE_STYLES.TASK_OUTPUT}
+        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.BLUE }}
       />
       
       <CardHeader className="pb-2">
@@ -241,7 +240,7 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
 };
 
 // Custom Agent Card Node Component with Handles
-const AgentCardNode = ({ data }: { data: { agent: Agent; onRequestTransaction: (agent: Agent, priceUsdt: number, walletAddress: string) => void; isExecuted: boolean } }) => {
+const AgentCardNode = ({ data }: { data: { agent: Agent } }) => {
   const [expanded, setExpanded] = useState(false);
 
   const generatePriceFromId = useCallback((seed: string): number => {
@@ -285,20 +284,18 @@ const AgentCardNode = ({ data }: { data: { agent: Agent; onRequestTransaction: (
 
   return (
     <Card className="w-72 bg-white shadow-lg border-2 border-green-200 relative">
-      {/* Input handle on the left side */}
+      {/* Handles for connections */}
       <Handle
         type="target"
         position={Position.Left}
         id={`agent-${data.agent.id}-input`}
-        style={HANDLE_STYLES.AGENT_INPUT}
+        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.BLUE }}
       />
-      
-      {/* Output handle on the right side */}
       <Handle
         type="source"
         position={Position.Right}
         id={`agent-${data.agent.id}-output`}
-        style={HANDLE_STYLES.AGENT_OUTPUT}
+        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.ORANGE }}
       />
       
       <CardHeader className="pb-3">
@@ -346,29 +343,6 @@ const AgentCardNode = ({ data }: { data: { agent: Agent; onRequestTransaction: (
             <div className="font-mono break-all text-gray-800">{walletAddress}</div>
           </div>
         )}
- 
-        <Button 
-          onClick={() => data.onRequestTransaction(data.agent, priceUsdt, walletAddress)}
-          disabled={data.isExecuted}
-          className={`w-full ${
-            data.isExecuted 
-              ? 'bg-gray-400 cursor-not-allowed' 
-              : 'bg-green-600 hover:bg-green-700'
-          } text-white`}
-          size="sm"
-        >
-          {data.isExecuted ? (
-            <>
-              <CheckIcon className="w-4 h-4 mr-2" />
-              Executed
-            </>
-          ) : (
-            <>
-              <PlayIcon className="w-4 h-4 mr-2" />
-              Execute
-            </>
-          )}
-        </Button>
       </CardContent>
     </Card>
   );
@@ -378,12 +352,12 @@ const AgentCardNode = ({ data }: { data: { agent: Agent; onRequestTransaction: (
 const ResponseNode = ({ data }: { data: { response: Response; agentName: string } }) => {
   return (
     <Card className="w-80 bg-white shadow-lg border-2 border-orange-200 relative">
-      {/* Input handle on the left side */}
+      {/* Input handle */}
       <Handle
         type="target"
         position={Position.Left}
         id={`response-${data.response.id}-input`}
-        style={HANDLE_STYLES.RESPONSE_INPUT}
+        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.ORANGE }}
       />
       
       <CardHeader className="pb-3">
@@ -408,12 +382,12 @@ const ResponseNode = ({ data }: { data: { response: Response; agentName: string 
 const SummaryNode = ({ data }: { data: { summary: Summary | null; onSummarize: () => void } }) => {
   return (
     <Card className="w-96 bg-white shadow-lg border-2 border-purple-200 relative">
-      {/* Input handle on the top */}
+      {/* Input handle */}
       <Handle
         type="target"
         position={Position.Top}
         id="summary-input"
-        style={HANDLE_STYLES.SUMMARY_INPUT}
+        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.PURPLE }}
       />
       
       <CardHeader className="pb-3">
@@ -455,13 +429,12 @@ const nodeTypes: NodeTypes = {
   summary: SummaryNode,
 };
 
-export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, onSummarize, onRequestAgentSelection, isGenerating = false }: CanvasFlowProps) {
+export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, onExecuteAllAgents, onSummarize, onRequestAgentSelection, isGenerating = false, allAgentsExecuted = false }: CanvasFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   
   // Transaction confirmation dialog state
   const [isTxDialogOpen, setIsTxDialogOpen] = useState(false);
-  const [pendingTransaction, setPendingTransaction] = useState<null | { agent: Agent; priceUsdt: number; walletAddress: string }>(null);
   const [showAdvancedTxDetails, setShowAdvancedTxDetails] = useState(false);
 
   // Web3-like transaction display defaults (can be made configurable later)
@@ -473,18 +446,37 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
   const estimatedConfirmation = '~15s';
   const shortenAddress = (addr: string) => (addr.length > 10 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr);
  
-  const openTransactionDialog = useCallback((agent: Agent, priceUsdt: number, walletAddress: string) => {
-    setPendingTransaction({ agent, priceUsdt, walletAddress });
+  // Calculate total cost for all agents
+  const calculateTotalCost = useCallback(() => {
+    return agents.reduce((total, agent) => {
+      const price = typeof agent.pricingUsdt === 'number' 
+        ? agent.pricingUsdt 
+        : (() => {
+            // Generate price from agent ID (same logic as in AgentCardNode)
+            let hash = 0;
+            const seed = `${agent.id}:${agent.name}`;
+            for (let i = 0; i < seed.length; i++) {
+              hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+            }
+            const min = 0.25;
+            const max = 2.5;
+            const normalized = (hash % 1000) / 1000;
+            return Math.round((min + normalized * (max - min)) * 100) / 100;
+          })();
+      return total + price;
+    }, 0);
+  }, [agents]);
+
+  const openBatchTransactionDialog = useCallback(() => {
     setIsTxDialogOpen(true);
     setShowAdvancedTxDetails(false);
   }, []);
 
-  const confirmAndExecute = useCallback(() => {
-    if (!pendingTransaction) return;
-    onExecuteAgent(pendingTransaction.agent.id);
+  const confirmAndExecuteAll = useCallback(() => {
+    // Execute all agents at once
+    onExecuteAllAgents();
     setIsTxDialogOpen(false);
-    setPendingTransaction(null);
-  }, [onExecuteAgent, pendingTransaction]);
+  }, [onExecuteAllAgents]);
   
   // Store node positions to persist them during updates
   const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -505,17 +497,16 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
     newNodes.push({
       id: 'task-decomposition-title',
       type: 'taskDecompositionTitle',
-      position: nodePositionsRef.current.get('task-decomposition-title') || LAYOUT_CONSTANTS.INITIAL_POSITIONS.TITLE,
+      position: nodePositionsRef.current.get('task-decomposition-title') || LAYOUT.INITIAL.TITLE,
       data: { isGenerating },
     });
 
     // Add individual Task nodes in a vertical chain with proper spacing for edge visibility
     tasks.forEach((task, index) => {
       const savedPosition = nodePositionsRef.current.get(`task-${task.id}`);
-      // Increase vertical spacing to ensure edges are visible
       const defaultPosition = { 
-        x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.x, 
-        y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.y + index * LAYOUT_CONSTANTS.VERTICAL_SPACING.TASKS 
+        x: LAYOUT.INITIAL.TASK.x, 
+        y: LAYOUT.INITIAL.TASK.y + index * LAYOUT.SPACING.VERTICAL.TASKS 
       };
       
       newNodes.push({
@@ -528,12 +519,10 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
 
     // Add Agent Card nodes positioned horizontally from tasks with proper spacing
     agents.forEach((agent, index) => {
-      const isExecuted = responses.some(r => r.agentId === agent.id);
       const savedPosition = nodePositionsRef.current.get(`agent-${agent.id}`);
-      // Position agents horizontally from tasks with vertical spacing
       const defaultPosition = { 
-        x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_AGENT.x, 
-        y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_AGENT.y + index * LAYOUT_CONSTANTS.VERTICAL_SPACING.AGENTS_RESPONSES 
+        x: LAYOUT.INITIAL.AGENT.x, 
+        y: LAYOUT.INITIAL.AGENT.y + index * LAYOUT.SPACING.VERTICAL.AGENTS 
       };
       
       newNodes.push({
@@ -541,9 +530,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         type: 'agentCard',
         position: savedPosition || defaultPosition,
         data: { 
-          agent,
-          onRequestTransaction: openTransactionDialog,
-          isExecuted
+          agent
         },
       });
     });
@@ -553,10 +540,9 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
       const agent = agents.find(a => a.id === response.agentId);
       if (agent) {
         const savedPosition = nodePositionsRef.current.get(`response-${response.id}`);
-        // Position responses horizontally from agents with vertical spacing
         const defaultPosition = { 
-          x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_RESPONSE.x, 
-          y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_RESPONSE.y + index * LAYOUT_CONSTANTS.VERTICAL_SPACING.AGENTS_RESPONSES 
+          x: LAYOUT.INITIAL.RESPONSE.x, 
+          y: LAYOUT.INITIAL.RESPONSE.y + index * LAYOUT.SPACING.VERTICAL.AGENTS 
         };
         
         newNodes.push({
@@ -574,10 +560,9 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
     // Add Summary node only if there are responses to summarize
     if (responses.length > 0) {
       const savedPosition = nodePositionsRef.current.get('summary-node');
-      // Position summary below the last task with spacing for better proximity
       const defaultPosition = { 
-        x: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.x, 
-        y: LAYOUT_CONSTANTS.INITIAL_POSITIONS.FIRST_TASK.y + tasks.length * LAYOUT_CONSTANTS.VERTICAL_SPACING.TASKS + LAYOUT_CONSTANTS.VERTICAL_SPACING.SUMMARY 
+        x: LAYOUT.INITIAL.TASK.x, 
+        y: LAYOUT.INITIAL.TASK.y + tasks.length * LAYOUT.SPACING.VERTICAL.TASKS + LAYOUT.SPACING.VERTICAL.SUMMARY_OFFSET 
       };
       
       newNodes.push({
@@ -601,7 +586,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         source: 'task-decomposition-title',
         target: `task-${tasks[0].id}`,
         type: 'default',
-        style: EDGE_STYLES.TITLE_TO_TASK
+        style: STYLES.EDGES.TITLE_TO_TASK
       });
 
       // Connect tasks in sequence (vertical)
@@ -611,7 +596,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
           source: `task-${tasks[i].id}`,
           target: `task-${tasks[i + 1].id}`,
           type: 'default',
-          style: EDGE_STYLES.TASK_CHAIN
+          style: STYLES.EDGES.TASK_CHAIN
         });
       }
 
@@ -623,7 +608,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
           source: `task-${lastTaskId}`,
           target: 'summary-node',
           type: 'default',
-          style: EDGE_STYLES.TASK_TO_SUMMARY
+          style: STYLES.EDGES.TASK_TO_SUMMARY
         });
         console.log('Created last task to summary edge:', `ts-${lastTaskId}`);
       }
@@ -653,7 +638,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
               sourceHandle: `task-${agent.taskId}-output-right`,
               targetHandle: `agent-${agent.id}-input`,
               type: 'default',
-              style: EDGE_STYLES.TASK_TO_AGENT
+              style: STYLES.EDGES.TASK_TO_AGENT
             });
             console.log('Created task-agent edge:', edgeId, 'for agent:', agent.id, 'task:', agent.taskId);
           } else {
@@ -681,7 +666,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
             sourceHandle: `agent-${response.agentId}-output`,
             targetHandle: `response-${response.id}-input`,
             type: 'default',
-            style: EDGE_STYLES.AGENT_TO_RESPONSE
+            style: STYLES.EDGES.AGENT_TO_RESPONSE
           });
           console.log('Created horizontal agent-response edge:', edgeId);
         }
@@ -696,7 +681,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
     console.log('Total edges created:', newEdges.length);
     console.log('All edge IDs:', newEdges.map(edge => edge.id));
     setEdges(newEdges);
-  }, [tasks, agents, responses, summary, onExecuteAgent, onSummarize, setNodes, setEdges, isGenerating, openTransactionDialog]);
+  }, [tasks, agents, responses, summary, onExecuteAgent, onSummarize, setNodes, setEdges, isGenerating]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -704,7 +689,21 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
   );
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
+      {/* Execute All Agents Button - Floating Action */}
+      {agents.length > 0 && !allAgentsExecuted && (
+        <div className="absolute top-4 right-4 z-10">
+          <Button
+            onClick={openBatchTransactionDialog}
+            className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white shadow-lg"
+            size="lg"
+          >
+            <RocketIcon className="w-5 h-5 mr-2" />
+            Execute All Agents ({agents.length})
+          </Button>
+        </div>
+      )}
+      
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -721,38 +720,63 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         <Background color="#aaa" gap={16} />
       </ReactFlow>
 
-      {/* Transaction Confirmation Dialog */}
+      {/* Batch Transaction Confirmation Dialog */}
       <AlertDialog open={isTxDialogOpen} onOpenChange={setIsTxDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Transaction</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Batch Transaction - Execute All Agents</AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingTransaction ? (
-                <div className="space-y-3 text-sm">
-                  <div className="grid grid-cols-3 gap-x-4 gap-y-1">
-                    <div className="text-muted-foreground">Network</div>
-                    <div className="col-span-2">{networkName}</div>
+              {
+                <div className="space-y-4 text-sm">
+                  {/* Agents to Execute */}
+                  <div>
+                    <div className="font-medium text-base mb-2">Agents to Execute ({agents.length})</div>
+                    <div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+                      {agents.map((agent, index) => {
+                        const price = typeof agent.pricingUsdt === 'number' 
+                          ? agent.pricingUsdt 
+                          : (() => {
+                              let hash = 0;
+                              const seed = `${agent.id}:${agent.name}`;
+                              for (let i = 0; i < seed.length; i++) {
+                                hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+                              }
+                              const min = 0.25;
+                              const max = 2.5;
+                              const normalized = (hash % 1000) / 1000;
+                              return Math.round((min + normalized * (max - min)) * 100) / 100;
+                            })();
+                        return (
+                          <div key={agent.id} className="flex justify-between items-center">
+                            <span className="font-medium">{index + 1}. {agent.name}</span>
+                            <span className="text-gray-600">${price.toFixed(2)} USDT</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-                    <div className="text-muted-foreground">From</div>
-                    <div className="col-span-2">Your wallet</div>
+                  {/* Transaction Summary */}
+                  <div className="border-t pt-3">
+                    <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+                      <div className="text-muted-foreground">Network</div>
+                      <div className="col-span-2">{networkName}</div>
 
-                    <div className="text-muted-foreground">To</div>
-                    <div className="col-span-2 break-all">{shortenAddress(pendingTransaction.walletAddress)}</div>
+                      <div className="text-muted-foreground">From</div>
+                      <div className="col-span-2">Your wallet</div>
 
-                    <div className="text-muted-foreground">Token</div>
-                    <div className="col-span-2">{tokenSymbol}</div>
+                      <div className="text-muted-foreground">Token</div>
+                      <div className="col-span-2">{tokenSymbol}</div>
 
-                    <div className="text-muted-foreground">Amount</div>
-                    <div className="col-span-2">${pendingTransaction.priceUsdt.toFixed(2)} USDT</div>
+                      <div className="text-muted-foreground">Total Amount</div>
+                      <div className="col-span-2 font-bold text-lg">${calculateTotalCost().toFixed(2)} USDT</div>
 
-                    <div className="text-muted-foreground">Network fee</div>
-                    <div className="col-span-2">~{estimatedGasEth.toFixed(6)} ETH ({gasPriceGwei} gwei × {estimatedGasLimit} gas)</div>
+                      <div className="text-muted-foreground">Network fee</div>
+                      <div className="col-span-2">~{(estimatedGasEth * agents.length).toFixed(6)} ETH ({agents.length} transactions)</div>
 
-                    <div className="text-muted-foreground">Est. time</div>
-                    <div className="col-span-2">{estimatedConfirmation}</div>
-
-                    <div className="text-muted-foreground">Total</div>
-                    <div className="col-span-2">${pendingTransaction.priceUsdt.toFixed(2)} USDT + network fee</div>
+                      <div className="text-muted-foreground">Est. time</div>
+                      <div className="col-span-2">{estimatedConfirmation}</div>
+                    </div>
                   </div>
 
                   <div>
@@ -766,23 +790,21 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
                     </button>
                     {showAdvancedTxDetails && (
                       <div className="mt-2 rounded-md border p-3 space-y-1 text-xs">
-                        <div><span className="font-medium">Agent:</span> {pendingTransaction.agent.name}</div>
-                        <div><span className="font-medium">Agent ID:</span> {pendingTransaction.agent.id}</div>
-                        <div className="break-all"><span className="font-medium">Recipient:</span> {pendingTransaction.walletAddress}</div>
-                        <div><span className="font-medium">Method:</span> executeAgent({pendingTransaction.agent.id})</div>
-                        <div className="text-muted-foreground">You will be asked to confirm this transaction in your wallet.</div>
+                        <div><span className="font-medium">Batch Execution:</span> {agents.length} agents</div>
+                        <div><span className="font-medium">Method:</span> executeAllAgents()</div>
+                        <div><span className="font-medium">Total Tasks:</span> {tasks.length}</div>
+                        <div className="text-muted-foreground">All agents will be executed in parallel via the Python orchestrator.</div>
+                        <div className="text-muted-foreground">You will be asked to confirm this batch transaction in your wallet.</div>
                       </div>
                     )}
                   </div>
                 </div>
-              ) : (
-                'Review the transaction details before proceeding.'
-              )}
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setIsTxDialogOpen(false); setPendingTransaction(null); }}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmAndExecute}>Confirm and Execute</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setIsTxDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAndExecuteAll}>Confirm and Execute All</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
