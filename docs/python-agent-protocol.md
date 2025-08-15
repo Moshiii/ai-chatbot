@@ -31,14 +31,23 @@ const provider = a2a(A2A_AGENT_URL, {
 }
 ```
 
-**Expected Response (Direct streaming via data-textDelta):**
+**Expected Response (A2A Protocol Format):**
 ```json
 {
-  "type": "data-textDelta",
-  "data": "{\"newTask\":{\"id\":\"task-uuid-1\",\"title\":\"Data Collection and Preparation\",\"description\":\"Gather and preprocess data from multiple sources\",\"status\":\"pending\",\"assignedAgent\":{\"id\":\"agent-uuid-1\",\"name\":\"DataCollector\",\"description\":\"Specializes in web scraping and API integration\",\"capabilities\":[\"Web Scraping\",\"API Integration\",\"Data Validation\"],\"pricingUsdt\":0.75,\"walletAddress\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb4\"}}}",
-  "transient": true
+  "kind": "artifact-update",
+  "artifact": {
+    "kind": "canvas",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "{\"newTask\":{\"id\":\"task-uuid-1\",\"title\":\"Data Collection and Preparation\",\"description\":\"Gather and preprocess data from multiple sources\",\"status\":\"pending\",\"assignedAgent\":{\"id\":\"agent-uuid-1\",\"name\":\"DataCollector\",\"description\":\"Specializes in web scraping and API integration\",\"capabilities\":[\"Web Scraping\",\"API Integration\",\"Data Validation\"],\"pricingUsdt\":0.75,\"walletAddress\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb4\"}}}"
+      }
+    ]
+  }
 }
 ```
+
+**Note:** The A2A provider automatically converts this to `data-textDelta` format for the UI.
 
 **Notes:**
 - Tasks should be streamed one at a time with `newTask` events via `data-textDelta`
@@ -47,7 +56,7 @@ const provider = a2a(A2A_AGENT_URL, {
 - Agent descriptions should be <= 10 words
 - Capabilities should be exactly 3 items
 - Use 200ms delay between tasks (not 800ms)
-- All streaming should use direct `data-textDelta` format
+- All streaming should use A2A `artifact-update` format with canvas artifacts
 
 ### 2. Execute All Agents (Batch Execution)
 
@@ -377,22 +386,36 @@ The agent detects this is a complex project requiring planning and decides to cr
 }
 ```
 
-**Step 2: Canvas System Receives and Processes**
-The Next.js app receives this through the A2A provider and streams each task to the UI:
+**Step 2: Python Agent Streams Tasks**
+For each task, the Python agent sends A2A artifact-update messages:
 
 ```json
-// First streaming message
+// First task stream
 {
-  "type": "data-textDelta",
-  "data": "{\"newTask\":{\"id\":\"task-001\",\"title\":\"Setup Web Scraping Infrastructure\",\"description\":\"Configure scraping framework and proxy rotation\",\"status\":\"pending\",\"assignedAgent\":{\"id\":\"agent-001\",\"name\":\"ScraperSetup\",\"description\":\"Infrastructure and configuration specialist\",\"capabilities\":[\"Infrastructure\",\"Configuration\",\"Security\"],\"pricingUsdt\":0.75,\"walletAddress\":\"0x1234...abcd\"}}}",
-  "transient": true
+  "kind": "artifact-update",
+  "artifact": {
+    "kind": "canvas",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "{\"newTask\":{\"id\":\"task-001\",\"title\":\"Setup Web Scraping Infrastructure\",\"description\":\"Configure scraping framework and proxy rotation\",\"status\":\"pending\",\"assignedAgent\":{\"id\":\"agent-001\",\"name\":\"ScraperSetup\",\"description\":\"Infrastructure and configuration specialist\",\"capabilities\":[\"Infrastructure\",\"Configuration\",\"Security\"],\"pricingUsdt\":0.75,\"walletAddress\":\"0x1234...abcd\"}}}"
+      }
+    ]
+  }
 }
 
-// Second streaming message (after 200ms delay)
+// Second task stream (after 200ms delay)
 {
-  "type": "data-textDelta",
-  "data": "{\"newTask\":{\"id\":\"task-002\",\"title\":\"Identify Target Websites\",\"description\":\"Research and map competitor websites and price locations\",\"status\":\"pending\",\"assignedAgent\":{\"id\":\"agent-002\",\"name\":\"WebAnalyzer\",\"description\":\"Website structure and pattern analyzer\",\"capabilities\":[\"Analysis\",\"Mapping\",\"Research\"],\"pricingUsdt\":0.50,\"walletAddress\":\"0x5678...efgh\"}}}",
-  "transient": true
+  "kind": "artifact-update",
+  "artifact": {
+    "kind": "canvas",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "{\"newTask\":{\"id\":\"task-002\",\"title\":\"Identify Target Websites\",\"description\":\"Research and map competitor websites and price locations\",\"status\":\"pending\",\"assignedAgent\":{\"id\":\"agent-002\",\"name\":\"WebAnalyzer\",\"description\":\"Website structure and pattern analyzer\",\"capabilities\":[\"Analysis\",\"Mapping\",\"Research\"],\"pricingUsdt\":0.50,\"walletAddress\":\"0x5678...efgh\"}}}"
+      }
+    ]
+  }
 }
 // ... continues for all tasks
 ```
@@ -463,32 +486,60 @@ The Next.js app receives this through the A2A provider and streams each task to 
 The Python agent executes agents in parallel and streams updates:
 
 ```json
-// Agent 1 starts
+// Agent 1 starts (A2A format)
 {
-  "type": "data-textDelta",
-  "data": "{\"agentResponse\":{\"agentId\":\"agent-001\",\"taskId\":\"task-001\",\"status\":\"in-progress\",\"content\":\"Initializing scraping infrastructure setup...\",\"timestamp\":\"2024-01-20T10:30:00Z\"}}",
-  "transient": true
+  "kind": "artifact-update",
+  "artifact": {
+    "kind": "canvas",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "{\"agentResponse\":{\"agentId\":\"agent-001\",\"taskId\":\"task-001\",\"status\":\"in-progress\",\"content\":\"Initializing scraping infrastructure setup...\",\"timestamp\":\"2024-01-20T10:30:00Z\"}}"
+      }
+    ]
+  }
 }
 
 // Agent 2 starts (parallel)
 {
-  "type": "data-textDelta",
-  "data": "{\"agentResponse\":{\"agentId\":\"agent-002\",\"taskId\":\"task-002\",\"status\":\"in-progress\",\"content\":\"Analyzing competitor websites...\",\"timestamp\":\"2024-01-20T10:30:01Z\"}}",
-  "transient": true
+  "kind": "artifact-update",
+  "artifact": {
+    "kind": "canvas",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "{\"agentResponse\":{\"agentId\":\"agent-002\",\"taskId\":\"task-002\",\"status\":\"in-progress\",\"content\":\"Analyzing competitor websites...\",\"timestamp\":\"2024-01-20T10:30:01Z\"}}"
+      }
+    ]
+  }
 }
 
 // Agent 1 progress update (streaming)
 {
-  "type": "data-textDelta",
-  "data": "{\"agentResponse\":{\"agentId\":\"agent-001\",\"taskId\":\"task-001\",\"status\":\"in-progress\",\"content\":\"Initializing scraping infrastructure setup...\\n✓ Configured Scrapy framework\\n✓ Set up proxy rotation (50 proxies)\\n✓ Implemented rate limiting\\n→ Testing connection stability...\",\"timestamp\":\"2024-01-20T10:30:15Z\"}}",
-  "transient": true
+  "kind": "artifact-update",
+  "artifact": {
+    "kind": "canvas",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "{\"agentResponse\":{\"agentId\":\"agent-001\",\"taskId\":\"task-001\",\"status\":\"in-progress\",\"content\":\"Initializing scraping infrastructure setup...\\n✓ Configured Scrapy framework\\n✓ Set up proxy rotation (50 proxies)\\n✓ Implemented rate limiting\\n→ Testing connection stability...\",\"timestamp\":\"2024-01-20T10:30:15Z\"}}"
+      }
+    ]
+  }
 }
 
 // Agent 1 completes
 {
-  "type": "data-textDelta",
-  "data": "{\"agentResponse\":{\"agentId\":\"agent-001\",\"taskId\":\"task-001\",\"status\":\"completed\",\"content\":\"Infrastructure setup completed successfully:\\n✓ Scrapy framework configured\\n✓ 50 rotating proxies active\\n✓ Rate limiting: 2 req/sec per domain\\n✓ Error handling and retry logic implemented\\n✓ Connection pool optimized\\n\\nSystem ready for scraping operations.\",\"timestamp\":\"2024-01-20T10:31:00Z\"}}",
-  "transient": true
+  "kind": "artifact-update",
+  "artifact": {
+    "kind": "canvas",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "{\"agentResponse\":{\"agentId\":\"agent-001\",\"taskId\":\"task-001\",\"status\":\"completed\",\"content\":\"Infrastructure setup completed successfully:\\n✓ Scrapy framework configured\\n✓ 50 rotating proxies active\\n✓ Rate limiting: 2 req/sec per domain\\n✓ Error handling and retry logic implemented\\n✓ Connection pool optimized\\n\\nSystem ready for scraping operations.\",\"timestamp\":\"2024-01-20T10:31:00Z\"}}"
+      }
+    ]
+  }
 }
 
 // Continue for all agents...
@@ -500,9 +551,16 @@ The Python agent executes agents in parallel and streams updates:
 
 ```json
 {
-  "type": "data-textDelta",
-  "data": "{\"summary\":{\"id\":\"summary-001\",\"content\":\"## Executive Summary: Competitor Price Monitoring System\\n\\n### Project Status\\n✅ All 4 tasks completed successfully (100%)\\n⏱️ Total execution time: 5 minutes 32 seconds\\n💰 Total cost: 3.50 USDT\\n\\n### Key Accomplishments\\n\\n**1. Infrastructure Setup (ScraperSetup)**\\n- Configured Scrapy framework with 50 rotating proxies\\n- Implemented rate limiting and error handling\\n- Set up distributed scraping capability\\n\\n**2. Website Analysis (WebAnalyzer)**\\n- Identified 12 competitor websites\\n- Mapped 847 product price locations\\n- Documented site-specific scraping patterns\\n\\n**3. Scraper Implementation (ScraperDev)**\\n- Built custom scrapers for all 12 sites\\n- Implemented dynamic content handling\\n- Added anti-detection measures\\n\\n**4. Data Pipeline (DataPipeline)**\\n- PostgreSQL database configured\\n- Real-time data cleaning pipeline\\n- Automated price change detection\\n- Daily report generation system\\n\\n### System Capabilities\\n- Monitor 10,000+ products across 12 sites\\n- Update frequency: Every 6 hours\\n- Price change detection: < 1% threshold\\n- Historical data retention: 90 days\\n\\n### Next Steps\\n1. Deploy to production environment\\n2. Set up monitoring dashboards\\n3. Configure alert thresholds\\n4. Schedule first production run\\n\\n### Technical Metrics\\n- Scraping success rate: 98.5%\\n- Average response time: 1.2s\\n- Data accuracy: 99.7%\\n- System uptime target: 99.9%\\n\\nGenerated: 2024-01-20T10:35:00Z\\nOrchestrated by: Python Agent v2.0\",\"timestamp\":\"2024-01-20T10:35:00Z\"}}",
-  "transient": true
+  "kind": "artifact-update",
+  "artifact": {
+    "kind": "canvas",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "{\"summary\":{\"id\":\"summary-001\",\"content\":\"## Executive Summary: Competitor Price Monitoring System\\n\\n### Project Status\\n✅ All 4 tasks completed successfully (100%)\\n⏱️ Total execution time: 5 minutes 32 seconds\\n💰 Total cost: 3.50 USDT\\n\\n### Key Accomplishments\\n\\n**1. Infrastructure Setup (ScraperSetup)**\\n- Configured Scrapy framework with 50 rotating proxies\\n- Implemented rate limiting and error handling\\n- Set up distributed scraping capability\\n\\n**2. Website Analysis (WebAnalyzer)**\\n- Identified 12 competitor websites\\n- Mapped 847 product price locations\\n- Documented site-specific scraping patterns\\n\\n**3. Scraper Implementation (ScraperDev)**\\n- Built custom scrapers for all 12 sites\\n- Implemented dynamic content handling\\n- Added anti-detection measures\\n\\n**4. Data Pipeline (DataPipeline)**\\n- PostgreSQL database configured\\n- Real-time data cleaning pipeline\\n- Automated price change detection\\n- Daily report generation system\\n\\n### System Capabilities\\n- Monitor 10,000+ products across 12 sites\\n- Update frequency: Every 6 hours\\n- Price change detection: < 1% threshold\\n- Historical data retention: 90 days\\n\\n### Next Steps\\n1. Deploy to production environment\\n2. Set up monitoring dashboards\\n3. Configure alert thresholds\\n4. Schedule first production run\\n\\n### Technical Metrics\\n- Scraping success rate: 98.5%\\n- Average response time: 1.2s\\n- Data accuracy: 99.7%\\n- System uptime target: 99.9%\\n\\nGenerated: 2024-01-20T10:35:00Z\\nOrchestrated by: Python Agent v2.0\",\"timestamp\":\"2024-01-20T10:35:00Z\"}}"
+      }
+    ]
+  }
 }
 ```
 
@@ -562,9 +620,16 @@ class CanvasOrchestrator:
     async def stream_task(self, task: Dict[str, Any]):
         """Stream individual task to canvas"""
         message = {
-            "type": "data-textDelta",
-            "data": json.dumps({"newTask": task}),
-            "transient": True
+            "kind": "artifact-update",
+            "artifact": {
+                "kind": "canvas",
+                "parts": [
+                    {
+                        "kind": "text",
+                        "text": json.dumps({"newTask": task})
+                    }
+                ]
+            }
         }
         await self.a2a_client.send(message)
     
@@ -616,17 +681,24 @@ class CanvasOrchestrator:
                                    status: str, content: str):
         """Stream agent execution update"""
         message = {
-            "type": "data-textDelta",
-            "data": json.dumps({
-                "agentResponse": {
-                    "agentId": agent_id,
-                    "taskId": task_id,
-                    "status": status,
-                    "content": content,
-                    "timestamp": datetime.utcnow().isoformat() + 'Z'
-                }
-            }),
-            "transient": True
+            "kind": "artifact-update",
+            "artifact": {
+                "kind": "canvas",
+                "parts": [
+                    {
+                        "kind": "text",
+                        "text": json.dumps({
+                            "agentResponse": {
+                                "agentId": agent_id,
+                                "taskId": task_id,
+                                "status": status,
+                                "content": content,
+                                "timestamp": datetime.utcnow().isoformat() + 'Z'
+                            }
+                        })
+                    }
+                ]
+            }
         }
         await self.a2a_client.send(message)
 
@@ -665,9 +737,9 @@ async def handle_user_message(user_message: str, orchestrator: CanvasOrchestrato
 - [ ] Canvas saves and loads correctly
 - [ ] Transaction dialog shows all agents
 - [ ] Execute All Agents button triggers batch execution
-- [ ] Messages use `data-textDelta` format directly
-- [ ] JSON data is properly escaped in `data` field
-- [ ] `transient: true` flag is set for streaming messages
+- [ ] Messages use A2A `artifact-update` format
+- [ ] JSON data is in `text` parts within artifact
+- [ ] Canvas `kind` is specified in artifact
 - [ ] Parallel execution completes within timeout
 
 ## Common Integration Issues and Solutions
@@ -699,4 +771,8 @@ async def handle_user_message(user_message: str, orchestrator: CanvasOrchestrato
 
 ### Issue 6: Incorrect Message Format
 **Symptom:** Messages not reaching canvas
-**Solution:** Use direct `data-textDelta` format, not nested `artifact-update` structure
+**Solution:** Use A2A standard `artifact-update` format with `text` parts
+
+### Issue 7: Wrong Protocol Layer
+**Symptom:** Direct `data-textDelta` not working
+**Solution:** Always use A2A `artifact-update` format - the provider converts automatically
