@@ -61,9 +61,15 @@ export class A2aChatLanguageModel implements LanguageModelV2 {
   }
 
   async doGenerate(options: Parameters<LanguageModelV2['doGenerate']>[0]) {
+    console.log('[A2A] Starting doGenerate');
     const message = this.createA2AMessage(options.prompt);
+    console.log('[A2A] Created message:', JSON.stringify(message, null, 2));
+    
     const response = await this.sendMessage(message);
+    console.log('[A2A] Received response:', JSON.stringify(response, null, 2));
+    
     const content = this.extractContent(response);
+    console.log('[A2A] Extracted content:', content);
 
     return {
       content,
@@ -76,17 +82,21 @@ export class A2aChatLanguageModel implements LanguageModelV2 {
   }
 
   async doStream(options: Parameters<LanguageModelV2['doStream']>[0]) {
+    console.log('[A2A] Starting doStream');
     const message = this.createA2AMessage(options.prompt);
+    console.log('[A2A] Stream message:', JSON.stringify(message, null, 2));
     
     try {
+      console.log('[A2A] Sending stream request to agent');
       const response = await this.client.sendMessageStream({
         message,
         configuration: { blocking: false, acceptedOutputModes: ['text/plain', 'application/json'] },
       });
+      console.log('[A2A] Stream response received, creating stream');
 
       return this.createStreamFromA2A(response);
     } catch (error: any) {
-      // Fallback to non-streaming
+      console.log('[A2A] Stream failed, falling back to non-streaming:', error.message);
       const result = await this.doGenerate(options);
       return this.createStreamFromResult(result);
     }
@@ -280,18 +290,26 @@ export class A2aChatLanguageModel implements LanguageModelV2 {
     return {
       stream: new ReadableStream({
         async start(controller) {
+          console.log('[A2A] Stream started, sending initial events');
           controller.enqueue({ type: 'stream-start', warnings: [] });
           controller.enqueue({ type: 'response-metadata', id: generateId() });
 
+          let chunkCount = 0;
           try {
+            console.log('[A2A] Starting to iterate over response chunks');
             for await (const chunk of response) {
+              chunkCount++;
+              console.log(`[A2A] Received chunk ${chunkCount}:`, chunk);
               processor.processChunk(chunk, controller);
             }
+            console.log(`[A2A] Finished processing ${chunkCount} chunks`);
           } catch (error: any) {
+            console.error('[A2A] Stream error:', error);
             controller.error(new Error(`Stream error: ${error.message}`));
             return;
           }
 
+          console.log('[A2A] Stream completed, sending finish event');
           controller.enqueue({
             type: 'finish',
             finishReason: 'stop',
@@ -317,13 +335,13 @@ export class A2aChatLanguageModel implements LanguageModelV2 {
 // Simplified StreamProcessor class
 class StreamProcessor {
   private processedEvents = new Map<string, Set<string>>();
+  private controllerClosed = false;
 
   processChunk(chunk: any, controller: ReadableStreamDefaultController<LanguageModelV2StreamPart>): void {
-    // Handle artifact updates with tool events
-    if (chunk.kind === 'artifact-update' && chunk.artifact?.parts) {
-      this.processArtifactParts(chunk.artifact.parts, controller);
+    if (this.controllerClosed) {
+      console.log('[A2A] Controller already closed, skipping chunk');
+      return;
     }
-
     // Handle different chunk types
     switch (chunk.kind) {
       case 'message':
@@ -336,13 +354,16 @@ class StreamProcessor {
         break;
         
       case 'artifact-update':
-        this.processMessageParts(chunk.artifact.parts, controller);
+        if (chunk.artifact?.parts) {
+          this.processArtifactParts(chunk.artifact.parts, controller);
+        }
         break;
         
       case 'status-update':
       case 'task-status-update':
         if (chunk.status?.message) this.processMessageParts(chunk.status.message.parts, controller);
         if (this.isTaskComplete(chunk)) {
+          this.controllerClosed = true;
           controller.enqueue({
             type: 'finish',
             finishReason: chunk.status?.state === 'failed' ? 'error' : 'stop',
@@ -370,17 +391,21 @@ class StreamProcessor {
 
   private processMessageParts(parts: Part[], controller: ReadableStreamDefaultController<LanguageModelV2StreamPart>): void {
     parts.forEach(part => {
-      if (part.kind === 'text' && part.text) {
-        const id = generateId();
-        controller.enqueue({ type: 'text-start', id });
-        controller.enqueue({ type: 'text-delta', id, delta: part.text });
-        controller.enqueue({ type: 'text-end', id });
-      } else if (part.kind === 'file' && part.file) {
-        controller.enqueue({
-          type: 'file',
-          data: 'bytes' in part.file ? part.file.bytes : part.file.uri,
-          mediaType: part.file.mimeType as string,
-        });
+      try {
+        if (part.kind === 'text' && part.text) {
+          const id = generateId();
+          controller.enqueue({ type: 'text-start', id });
+          controller.enqueue({ type: 'text-delta', id, delta: part.text });
+          controller.enqueue({ type: 'text-end', id });
+        } else if (part.kind === 'file' && part.file) {
+          controller.enqueue({
+            type: 'file',
+            data: 'bytes' in part.file ? part.file.bytes : part.file.uri,
+            mediaType: part.file.mimeType as string,
+          });
+        }
+      } catch (error: any) {
+        console.log('[A2A] Controller closed, skipping part:', error.message);
       }
     });
   }
