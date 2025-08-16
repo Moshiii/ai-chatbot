@@ -1,14 +1,14 @@
-# Canvas A2A Agent
+# Task A2A Agent
 
-A simple A2A agent that creates interactive task canvases for the chatbot.
+A Python A2A agent that handles task decomposition and job execution for the chatbot.
 
 ## Features
 
-- ✅ Creates task breakdowns with pre-assigned agents
-- ✅ Simulates agent execution and responses  
-- ✅ Generates project summaries
+- ✅ Decomposes projects into jobs with pre-assigned agents
+- ✅ Executes jobs and streams real-time updates
+- ✅ Generates project execution summaries
 - ✅ Supports different project types (web, scraping, API, generic)
-- ✅ Streams real-time updates to chatbot
+- ✅ Uses `createTask` and `updateTask` tools for chatbot integration
 
 ## Quick Start
 
@@ -20,7 +20,7 @@ A simple A2A agent that creates interactive task canvases for the chatbot.
 
 2. **Run the agent:**
    ```bash
-   python -m canvas_agent
+   python -m task_agent
    ```
 
 3. **Agent will start on:**
@@ -39,9 +39,10 @@ A simple A2A agent that creates interactive task canvases for the chatbot.
 2. **Select "Python Agent (A2A)" model in chatbot**
 
 3. **Test with messages like:**
-   - "Create a canvas for building a web application"
+   - "Create a task for building a web application"
    - "Help me plan a web scraping project"
    - "I need to build an API"
+   - "Execute the jobs for task-abc123"
 
 ## Message Format
 
@@ -67,7 +68,7 @@ The agent sends messages in the format expected by the chatbot:
 ## Project Structure
 
 ```
-canvas_agent/
+task_agent/
 ├── __init__.py          # Package init
 ├── __main__.py          # Entry point & server setup
 └── agent_executor.py    # Core logic & message handling

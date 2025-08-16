@@ -75,7 +75,7 @@ pnpm add @a2a-js/sdk
 
 ```bash
 ENABLE_A2A=true
-A2A_AGENT_URL=http://localhost:8000
+A2A_AGENT_URL=http://localhost:9999
 NEXT_PUBLIC_ENABLE_A2A=true
 ```
 

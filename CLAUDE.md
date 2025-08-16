@@ -42,7 +42,7 @@ Run specific test: `pnpm exec playwright test --grep "test-name"`
 The app implements a sophisticated real-time streaming chatbot with visual workflow management:
 
 1. **Chat API Route** (`app/(chat)/api/chat/route.ts`): Central orchestration layer handling authentication, tool selection, and stream management
-2. **Tool System**: AI-powered utilities including `planTasks`, `createCanvas`, `createDocument`, `updateDocument`, `getWeather`, and `requestSuggestions`
+2. **Tool System**: AI-powered utilities including `planTasks`, `createTask`, `updateTask`, `createDocument`, `updateDocument`, `getWeather`, and `requestSuggestions`
 3. **Canvas System**: Interactive ReactFlow-based visual interface for task decomposition and agent workflows
 4. **Streaming Architecture**: Uses AI SDK's streaming with custom data events for real-time UI updates
 
@@ -68,13 +68,15 @@ The app implements a sophisticated real-time streaming chatbot with visual workf
 
 **Migration Pattern**: Uses timestamped SQL migrations in `lib/db/migrations/` with Drizzle schema definitions.
 
-### Python A2A Agent Integration
+### Python Task Agent Integration
 
-Optional Python agent system (`python-agent/`) that can handle chat requests:
-- Set `ENABLE_A2A=true` and `A2A_AGENT_URL=http://localhost:8000` (or 9999 for local agent)
-- Provides "Python Agent (A2A)" model option
-- Implements canvas task creation with pre-assigned agents
-- Runs with `cd python-agent && python -m canvas_agent`
+Optional Python task agent system (`python-agent/task_agent/`) for task decomposition and job execution:
+- **Setup**: Set `ENABLE_A2A=true` and `A2A_AGENT_URL=http://localhost:9999`
+- **Tools**: Uses `createTask` and `updateTask` tools for seamless integration
+- **Features**: Decomposes projects into jobs, assigns agents, executes work, streams updates
+- **Usage**: Select "Python Agent (A2A)" model in chatbot interface
+- **Execution**: Job execution via `/api/agent/execution` endpoint
+- **Run**: `cd python-agent && python -m task_agent`
 
 ### File Organization
 

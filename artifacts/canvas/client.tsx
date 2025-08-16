@@ -13,7 +13,6 @@ import {
 import type { Suggestion } from '@/lib/db/schema';
 import { toast } from 'sonner';
 import { getSuggestions } from '../actions';
-import { generateUUID } from '@/lib/utils';
 
 // Configuration constants
 const CONFIG = {
@@ -29,6 +28,7 @@ const CONFIG = {
 } as const;
 
 interface CanvasArtifactMetadata {
+  taskId?: string; // The task ID from Python agent (for execution)
   suggestions: Array<Suggestion>;
   tasks: Array<{
     id: string;
@@ -65,6 +65,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
     const suggestions = await getSuggestions({ documentId });
 
     setMetadata({
+      taskId: undefined, // Will be set when task is created
       suggestions,
       tasks: [],
       agents: [],
@@ -82,39 +83,46 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       });
     }
 
+
     if (streamPart.type === 'data-textDelta') {
       setArtifact((draftArtifact) => {
         // Parse streamed data from Python agent
         try {
           const parsedData = JSON.parse(streamPart.data);
           
-          // Handle new task with pre-assigned agent
-          if (parsedData.newTask) {
-            console.log('Received task with agent:', parsedData.newTask.title);
+          // Handle new job with pre-assigned agent (jobs within a task)
+          if (parsedData.newJob) {
+            console.log('Received job with agent:', parsedData.newJob.title);
+            if (parsedData.taskId) {
+              console.log('Setting taskId in metadata:', parsedData.taskId);
+            } else {
+              console.warn('No taskId in parsedData for job:', parsedData.newJob.title);
+            }
             setMetadata((metadata) => ({
               ...metadata,
-              tasks: [...(metadata?.tasks || []), parsedData.newTask],
-              // Add agent if task has one assigned
-              agents: parsedData.newTask.assignedAgent 
-                ? [...(metadata?.agents || []), { ...parsedData.newTask.assignedAgent, taskId: parsedData.newTask.id }]
+              taskId: parsedData.taskId || metadata?.taskId, // Set or preserve taskId
+              tasks: [...(metadata?.tasks || []), parsedData.newJob], // UI uses 'tasks' for jobs
+              // Add agent if job has one assigned
+              agents: parsedData.newJob.assignedAgent 
+                ? [...(metadata?.agents || []), { ...parsedData.newJob.assignedAgent, taskId: parsedData.newJob.id }]
                 : metadata?.agents || [],
             }));
           }
-          // Handle agent response
-          else if (parsedData.agentResponse) {
-            console.log('Received agent response:', parsedData.agentResponse.agentId);
+          // Handle job response from agent execution
+          else if (parsedData.jobResponse) {
+            console.log('Received job response:', parsedData.jobResponse.agentId);
             setMetadata((metadata) => ({
               ...metadata,
+              taskId: metadata?.taskId, // Preserve taskId
               responses: [...(metadata?.responses || []), {
-                ...parsedData.agentResponse,
-                timestamp: new Date(parsedData.agentResponse.timestamp),
+                ...parsedData.jobResponse,
+                timestamp: new Date(parsedData.jobResponse.timestamp),
               }],
-              // Update task status if needed
-              tasks: (metadata?.tasks || []).map(task => {
-                const agent = metadata?.agents.find(a => a.id === parsedData.agentResponse.agentId);
-                return agent?.taskId === task.id 
-                  ? { ...task, status: parsedData.agentResponse.status === 'completed' ? 'completed' : 'in-progress' as const }
-                  : task;
+              // Update job status if needed
+              tasks: (metadata?.tasks || []).map(job => {
+                return job.id === parsedData.jobResponse.jobId
+                  ? { ...job, status: parsedData.jobResponse.status || 'completed' as const }
+                  : job;
               }),
             }));
           }
@@ -123,6 +131,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
             console.log('Received summary');
             setMetadata((metadata) => ({
               ...metadata,
+              taskId: metadata?.taskId, // Preserve taskId
               summary: {
                 ...parsedData.summary,
                 timestamp: new Date(parsedData.summary.timestamp),
@@ -134,6 +143,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
             console.log('Received complete data with', parsedData.tasks.length, 'tasks');
             setMetadata((metadata) => ({
               ...metadata,
+              taskId: metadata?.taskId, // Preserve taskId
               tasks: parsedData.tasks,
               agents: parsedData.agents || [],
               responses: parsedData.responses || [],
@@ -185,6 +195,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
             
             setMetadata((metadata) => ({
               ...metadata,
+              taskId: metadata?.taskId, // Preserve taskId
               tasks: parsedData.tasks,
               agents: parsedData.agents || [],
               responses,
@@ -237,28 +248,31 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       );
     }
 
-    // Handler for agent selection - no longer needed, agents come pre-assigned
-    const handleRequestAgentSelection = async (taskDescription: string, taskId?: string) => {
-      toast.info('Agents are automatically assigned by the system');
-    };
-
-    // Handler for individual agent execution - deprecated
-    const handleExecuteAgent = (agentId: string) => {
-      console.log('Individual agent execution is deprecated');
-    };
 
     // Handler for executing all agents via Python orchestrator
     const handleExecuteAllAgents = async () => {
       const agents = metadata?.agents || [];
+      
+      console.log('Execute clicked - Current metadata:', metadata);
+      console.log('TaskId in metadata:', metadata?.taskId);
       
       if (!agents.length) {
         toast.warning('No agents available to execute');
         return;
       }
 
-      toast.info(`Executing ${agents.length} agents via orchestrator...`);
+      // Get taskId from metadata (set when task was created)
+      const taskId = metadata?.taskId;
+      
+      if (!taskId) {
+        console.error('No taskId found in metadata:', metadata);
+        toast.error('No task ID found. Please create a task first.');
+        return;
+      }
 
-      // Update all tasks to in-progress
+      toast.info(`Executing ${agents.length} agents...`);
+      
+      // Update all jobs to in-progress when execution starts
       setMetadata((metadata) => ({
         ...metadata,
         tasks: (metadata?.tasks || []).map(task => ({
@@ -266,9 +280,101 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
           status: 'in-progress' as const
         })),
       }));
+      
+      try {
+        // Call API endpoint with taskId
+        const response = await fetch('/api/agent/execution', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            taskId,
+            executionMode: 'parallel',
+          }),
+        });
 
-      // Python agent will handle execution and stream back responses
-      // This is just a placeholder for the UI interaction
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(error || response.statusText);
+        }
+
+        // The API returns an SSE stream
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        
+        if (!reader) {
+          throw new Error('No response stream available');
+        }
+
+        // Process the SSE stream
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                
+                // Handle different event types
+                if (data.type === 'execution-started') {
+                  console.log('Execution started:', data.message);
+                } else if (data.type === 'job-update') {
+                  // Update job status
+                  console.log('Job update:', data.data);
+                  setMetadata((metadata) => ({
+                    ...metadata,
+                    taskId: metadata?.taskId, // Preserve taskId
+                    responses: [...(metadata?.responses || []), {
+                      ...data.data,
+                      timestamp: new Date(data.data.timestamp),
+                    }],
+                    tasks: (metadata?.tasks || []).map(job => 
+                      job.id === data.data.jobId
+                        ? { ...job, status: data.data.status || 'completed' as const }
+                        : job
+                    ),
+                  }));
+                } else if (data.type === 'summary-update') {
+                  // Update summary
+                  console.log('Summary update:', data.data);
+                  setMetadata((metadata) => ({
+                    ...metadata,
+                    taskId: metadata?.taskId, // Preserve taskId
+                    summary: {
+                      ...data.data,
+                      timestamp: new Date(data.data.timestamp),
+                    },
+                  }));
+                } else if (data.type === 'execution-completed') {
+                  toast.success('Agent execution completed successfully');
+                } else if (data.type === 'execution-error') {
+                  throw new Error(data.error);
+                }
+              } catch (parseError) {
+                console.error('Error parsing SSE data:', parseError);
+              }
+            }
+          }
+        }
+        
+      } catch (error) {
+        console.error('Error executing agents:', error);
+        toast.error('Failed to execute agents');
+        
+        // Revert job statuses on error
+        setMetadata((metadata) => ({
+          ...metadata,
+          tasks: (metadata?.tasks || []).map(task => ({
+            ...task,
+            status: 'pending' as const
+          })),
+        }));
+      }
     };
 
     // Handler for summary generation
@@ -296,10 +402,8 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
             agents={metadata?.agents || []}
             responses={metadata?.responses || []}
             summary={metadata?.summary || null}
-            onExecuteAgent={handleExecuteAgent}
             onExecuteAllAgents={handleExecuteAllAgents}
             onSummarize={handleSummarize}
-            onRequestAgentSelection={handleRequestAgentSelection}
             isGenerating={status === 'streaming' && (!metadata?.tasks || metadata.tasks.length === 0)}
             allAgentsExecuted={(metadata?.agents || []).every(agent => 
               (metadata?.responses || []).some(r => r.agentId === agent.id)

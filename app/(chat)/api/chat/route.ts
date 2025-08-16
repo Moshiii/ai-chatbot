@@ -24,7 +24,8 @@ import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
 import { planTasks } from '@/lib/ai/tools/plan-tasks';
-import { createCanvas } from '@/lib/ai/tools/create-canvas';
+import { createTask } from '@/lib/ai/tools/create-task';
+import { updateTask } from '@/lib/ai/tools/update-task';
 import { isProductionEnvironment } from '@/lib/constants';
 import { myProvider } from '@/lib/ai/providers';
 import { entitlementsByUserType } from '@/lib/ai/entitlements';
@@ -166,7 +167,8 @@ export async function POST(request: Request) {
               : [
                   'getWeather',
                   'planTasks',
-                  'createCanvas',
+                  'createTask',
+                  'updateTask',
                   'createDocument',
                   'updateDocument',
                   'requestSuggestions',
@@ -175,7 +177,8 @@ export async function POST(request: Request) {
           tools: {
             getWeather,
             planTasks: planTasks({ session, dataStream }),
-            createCanvas: createCanvas({ session, dataStream }),
+            createTask: createTask({ session, dataStream }),
+            updateTask: updateTask({ session, dataStream }),
             createDocument: createDocument({ session, dataStream }),
             updateDocument: updateDocument({ session, dataStream }),
             requestSuggestions: requestSuggestions({

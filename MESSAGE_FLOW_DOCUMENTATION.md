@@ -65,7 +65,8 @@ experimental_activeTools: selectedChatModel === 'chat-model-reasoning'
   : [
       'getWeather',
       'planTasks', 
-      'createCanvas',
+      'createTask',
+      'updateTask',
       'createDocument',
       'updateDocument',
       'requestSuggestions'
@@ -81,7 +82,8 @@ const stream = createUIMessageStream({
       experimental_transform: smoothStream({ chunking: 'word' }),
       tools: {
         planTasks: planTasks({ session, dataStream }),
-        createCanvas: createCanvas({ session, dataStream }),
+        createTask: createTask({ session, dataStream }),
+        updateTask: updateTask({ session, dataStream }),
         // ... other tools
       }
     });
@@ -449,7 +451,7 @@ Step 2: Tool Selection & Execution
 
 Step 3: Canvas Creation
 User: "Create a visual canvas for this"
-→ createCanvas tool selected
+→ createTask tool selected
 → Canvas document initialized with metadata
 → AI generates structured task JSON
 → Tasks stream in with visual delays (800ms each)

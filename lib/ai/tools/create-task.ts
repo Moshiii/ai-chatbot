@@ -5,7 +5,7 @@ import type { Session } from 'next-auth';
 import type { ChatMessage } from '@/lib/types';
 import { documentHandlersByArtifactKind } from '@/lib/artifacts/server';
 
-interface CreateCanvasProps {
+interface CreateTaskProps {
   session: Session;
   dataStream: UIMessageStreamWriter<ChatMessage>;
 }
@@ -22,12 +22,13 @@ function initializeDocumentStream(
   dataStream.write({ type: 'data-clear', data: null, transient: true });
 }
 
-export const createCanvas = ({ session, dataStream }: CreateCanvasProps) =>
+export const createTask = ({ session, dataStream }: CreateTaskProps) =>
   tool({
-    description: 'Create an interactive task management canvas. The agent decides when to create this for planning and task coordination.',
+    description: 'Create a task by decomposing a project into individual jobs with assigned agents.',
     inputSchema: z.object({
-      title: z.string().describe('Title/description of the canvas'),
-      tasks: z.array(z.object({
+      title: z.string().describe('Title of the task/project'),
+      taskId: z.string().describe('Unique identifier for the task'),
+      jobs: z.array(z.object({
         id: z.string(),
         title: z.string(),
         description: z.string(),
@@ -40,10 +41,11 @@ export const createCanvas = ({ session, dataStream }: CreateCanvasProps) =>
           pricingUsdt: z.number().optional(),
           walletAddress: z.string().optional(),
         }).optional(),
-      })).optional().describe('Pre-planned tasks with assigned agents from Python agent'),
+      })).describe('Jobs that make up this task'),
     }),
-    execute: async ({ title, tasks = [] }) => {
-      const id = generateUUID();
+    execute: async ({ title, taskId, jobs }) => {
+      const id = taskId || generateUUID();
+      console.log('[createTask] Creating task with id:', id, 'title:', title, 'jobs:', jobs.length);
 
       // Initialize document stream
       initializeDocumentStream(dataStream, id, title, 'canvas');
@@ -65,18 +67,21 @@ export const createCanvas = ({ session, dataStream }: CreateCanvasProps) =>
         session,
       });
 
-      // If tasks are provided, stream them to the canvas
-      if (tasks && tasks.length > 0) {
-        for (const task of tasks) {
-          dataStream.write({
-            type: 'data-textDelta',
-            data: JSON.stringify({ newTask: task }, null, 2),
-            transient: true,
-          });
-          
-          // Small delay between tasks for visual effect
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
+      // Stream jobs to the canvas UI with taskId
+      for (const job of jobs) {
+        const jobData = { 
+          newJob: job,
+          taskId: id  // Include taskId with each job
+        };
+        console.log('[createTask] Streaming job with taskId:', id, 'job:', job.title);
+        dataStream.write({
+          type: 'data-textDelta',
+          data: JSON.stringify(jobData),
+          transient: true,
+        });
+        
+        // Small delay between jobs for visual effect
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       dataStream.write({ type: 'data-finish', data: null, transient: true });
@@ -85,8 +90,9 @@ export const createCanvas = ({ session, dataStream }: CreateCanvasProps) =>
         id,
         title,
         kind: 'canvas',
-        content: 'A canvas document was created and is now visible to the user.',
-        message: `Canvas "${title}" has been created. The interactive task management interface is now available.`,
+        taskId: id,
+        jobCount: jobs.length,
+        message: `Task "${title}" created with ${jobs.length} jobs. Ready for agent execution.`,
       };
     },
   }); 

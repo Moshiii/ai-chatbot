@@ -2,19 +2,18 @@
 
 import React, { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import ReactFlow, {
-  Node,
-  Edge,
+  type Node,
+  type Edge,
   Controls,
   Background,
   useNodesState,
   useEdgesState,
   addEdge,
-  Connection,
-  EdgeTypes,
-  NodeTypes,
+  type Connection,
+  type NodeTypes,
   Handle,
   Position,
-  NodeDragHandler,
+  type NodeDragHandler,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,10 +97,8 @@ interface CanvasFlowProps {
   agents: Agent[];
   responses: Response[];
   summary: Summary | null;
-  onExecuteAgent: (agentId: string) => void;
   onExecuteAllAgents: () => void;
   onSummarize: () => void;
-  onRequestAgentSelection?: (taskDescription: string, taskId?: string) => Promise<void>;
   isGenerating?: boolean;
   allAgentsExecuted?: boolean;
 }
@@ -141,7 +138,7 @@ const TaskDecompositionTitleNode = ({ data }: { data: { isGenerating?: boolean }
 };
 
 // Custom Individual Task Node Component with Vertical and Horizontal Handles
-const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (taskDescription: string, taskId?: string) => Promise<void> } }) => {
+const TaskNode = ({ data }: { data: { task: Task } }) => {
   const [expanded, setExpanded] = useState(false);
   return (
     <Card className="w-64 bg-white shadow-lg border-2 border-blue-200 relative">
@@ -222,17 +219,6 @@ const TaskNode = ({ data }: { data: { task: Task; onRequestAgentSelection?: (tas
       <CardContent className="pt-0">
         {expanded && (
           <div className="text-xs text-gray-600 mb-2">{data.task.description}</div>
-        )}
-        {/* Agent Selection Button */}
-        {data.onRequestAgentSelection && (
-          <Button 
-            onClick={() => data.onRequestAgentSelection?.(data.task.description, data.task.id)}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs"
-            size="sm"
-          >
-            <UserPlusIcon className="w-3 h-3 mr-1" />
-            Request Agent
-          </Button>
         )}
       </CardContent>
     </Card>
@@ -327,8 +313,8 @@ const AgentCardNode = ({ data }: { data: { agent: Agent } }) => {
         {expanded && (
           <div className="space-y-2">
             <div className="flex flex-wrap gap-1">
-              {data.agent.capabilities.map((capability, index) => (
-                <Badge key={index} variant="outline" className="text-xs">
+              {data.agent.capabilities.map((capability) => (
+                <Badge key={capability} variant="outline" className="text-xs">
                   {capability}
                 </Badge>
               ))}
@@ -429,7 +415,7 @@ const nodeTypes: NodeTypes = {
   summary: SummaryNode,
 };
 
-export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, onExecuteAllAgents, onSummarize, onRequestAgentSelection, isGenerating = false, allAgentsExecuted = false }: CanvasFlowProps) {
+export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgents, onSummarize, isGenerating = false, allAgentsExecuted = false }: CanvasFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   
@@ -513,7 +499,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
         id: `task-${task.id}`,
         type: 'task',
         position: savedPosition || defaultPosition,
-        data: { task, onRequestAgentSelection },
+        data: { task },
       });
     });
 
@@ -681,7 +667,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAgent, 
     console.log('Total edges created:', newEdges.length);
     console.log('All edge IDs:', newEdges.map(edge => edge.id));
     setEdges(newEdges);
-  }, [tasks, agents, responses, summary, onExecuteAgent, onSummarize, setNodes, setEdges, isGenerating]);
+  }, [tasks, agents, responses, summary, onSummarize, setNodes, setEdges, isGenerating]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),

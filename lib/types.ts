@@ -2,7 +2,8 @@ import { z } from 'zod';
 import type { getWeather } from './ai/tools/get-weather';
 import type { planTasks } from './ai/tools/plan-tasks';
 import type { createDocument } from './ai/tools/create-document';
-import type { createCanvas } from './ai/tools/create-canvas';
+import type { createTask } from './ai/tools/create-task';
+import type { updateTask } from './ai/tools/update-task';
 import type { updateDocument } from './ai/tools/update-document';
 import type { requestSuggestions } from './ai/tools/request-suggestions';
 import type { InferUITool, UIMessage } from 'ai';
@@ -21,7 +22,8 @@ export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 type weatherTool = InferUITool<typeof getWeather>;
 type planTasksTool = InferUITool<ReturnType<typeof planTasks>>;
 type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
-type createCanvasTool = InferUITool<ReturnType<typeof createCanvas>>;
+type createTaskTool = InferUITool<ReturnType<typeof createTask>>;
+type updateTaskTool = InferUITool<ReturnType<typeof updateTask>>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
 type requestSuggestionsTool = InferUITool<
   ReturnType<typeof requestSuggestions>
@@ -31,7 +33,8 @@ export type ChatTools = {
   getWeather: weatherTool;
   planTasks: planTasksTool;
   createDocument: createDocumentTool;
-  createCanvas: createCanvasTool;
+  createTask: createTaskTool;
+  updateTask: updateTaskTool;
   updateDocument: updateDocumentTool;
   requestSuggestions: requestSuggestionsTool;
 };

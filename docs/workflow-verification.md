@@ -5,7 +5,7 @@
 ### **Step 1: User Initiates Conversation** ✅
 - User sends message: "I need to build a web scraping system"
 - Message processed by `/app/(chat)/api/chat/route.ts`
-- Tools available: `planTasks`, `createCanvas`, etc.
+- Tools available: `planTasks`, `createTask`, `updateTask`, etc.
 
 ### **Step 2: AI Model Selection** ✅
 - **Standard model**: Uses OpenAI GPT-4o
@@ -18,7 +18,8 @@
 experimental_activeTools: [
   'getWeather',
   'planTasks',      // ✅ Available
-  'createCanvas',   // ✅ Available 
+  'createTask',     // ✅ Available
+  'updateTask',      // ✅ Available 
   'createDocument',
   'updateDocument',
   'requestSuggestions',
@@ -26,7 +27,8 @@ experimental_activeTools: [
 
 tools: {
   planTasks: planTasks({ session, dataStream }),        // ✅ Properly bound
-  createCanvas: createCanvas({ session, dataStream }), // ✅ Properly bound
+  createTask: createTask({ session, dataStream }),     // ✅ Properly bound
+  updateTask: updateTask({ session, dataStream }),       // ✅ Properly bound
   // ... other tools
 }
 ```

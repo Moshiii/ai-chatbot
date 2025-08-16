@@ -1,6 +1,5 @@
 import { createDocumentHandler } from '@/lib/artifacts/server';
 import type { CreateDocumentCallbackProps, UpdateDocumentCallbackProps } from '@/lib/artifacts/server';
-import { generateUUID } from '@/lib/utils';
 
 // Configuration
 const CONFIG = {

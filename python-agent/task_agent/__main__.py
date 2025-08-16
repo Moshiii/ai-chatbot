@@ -1,0 +1,62 @@
+"""Task Agent Server - Main entry point"""
+
+import uvicorn
+
+from a2a.server.apps import A2AStarletteApplication
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
+from a2a.types import (
+    AgentCapabilities,
+    AgentCard,
+    AgentSkill,
+)
+from .agent_executor import TaskAgentExecutor
+
+
+if __name__ == '__main__':
+    # Define agent skills
+    task_creation_skill = AgentSkill(
+        id='create_task',
+        name='Create Task with Job Decomposition',
+        description='Creates a task and decomposes it into executable jobs with pre-assigned agents',
+        tags=['task', 'decomposition', 'planning'],
+        examples=['Create a task for building a web app', 'Plan a data analysis project'],
+    )
+    
+    task_execution_skill = AgentSkill(
+        id='execute_jobs',
+        name='Execute Task Jobs',
+        description='Executes jobs within a task and provides real-time progress updates',
+        tags=['execution', 'jobs', 'progress'],
+        examples=['Execute jobs for task-123', 'Run the planned tasks'],
+    )
+
+    # Public agent card
+    agent_card = AgentCard(
+        name='Task Agent',
+        description='A Python A2A agent that handles task decomposition and job execution',
+        url='http://localhost:9999/',
+        version='1.0.0',
+        defaultInputModes=['text'],
+        defaultOutputModes=['text'],
+        capabilities=AgentCapabilities(streaming=True),
+        skills=[task_creation_skill, task_execution_skill],
+    )
+
+    # Create request handler
+    request_handler = DefaultRequestHandler(
+        agent_executor=TaskAgentExecutor(),
+        task_store=InMemoryTaskStore(),
+    )
+
+    # Create server application
+    server = A2AStarletteApplication(
+        agent_card=agent_card,
+        http_handler=request_handler,
+    )
+    
+    app = server.build()
+
+    # Start server
+    print("[TaskAgent] Starting Task Agent Server on port 9999")
+    uvicorn.run(app, host="127.0.0.1", port=9999)

@@ -223,13 +223,13 @@ const PurePreviewMessage = ({
                 }
               }
 
-              if (type === 'tool-createCanvas') {
+              if (type === 'tool-createTask') {
                 const { toolCallId, state } = part;
 
                 if (state === 'input-available') {
                   const { input } = part;
                   return (
-                    <div key={`create-canvas-input-${toolCallId}`}>
+                    <div key={`create-task-input-${toolCallId}`}>
                       <DocumentPreview isReadonly={isReadonly} args={input} />
                     </div>
                   );
@@ -241,7 +241,7 @@ const PurePreviewMessage = ({
                   if ('error' in output) {
                     return (
                       <div
-                        key={`create-canvas-error-${toolCallId}`}
+                        key={`create-task-error-${toolCallId}`}
                         className="text-red-500 p-2 border rounded"
                       >
                         Error: {String(output.error)}
@@ -250,7 +250,7 @@ const PurePreviewMessage = ({
                   }
 
                   return (
-                    <div key={`create-canvas-output-${toolCallId}`}>
+                    <div key={`create-task-output-${toolCallId}`}>
                       <DocumentPreview
                         isReadonly={isReadonly}
                         result={output}

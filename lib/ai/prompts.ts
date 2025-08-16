@@ -10,7 +10,7 @@ const ARTIFACT_TYPES = {
   CANVAS: 'canvas',
 } as const;
 
-// Canvas workflow is now handled through the planTasks -> createCanvas flow
+// Canvas workflow is now handled through the planTasks -> createTask flow
 
 export const artifactsPrompt = `
 Artifacts is a special user interface mode that helps users with writing, editing, and other content creation tasks. When artifact is open, it is on the right side of the screen, while the conversation is on the left side. When creating or updating documents, changes are reflected in real-time on the artifacts and visible to the user.
@@ -19,8 +19,8 @@ Artifacts is a special user interface mode that helps users with writing, editin
 When users ask for task decomposition, project planning, breaking down tasks, or organizing work into subtasks:
 1. FIRST use \`planTasks\` to generate a text-based task breakdown
 2. The tool will automatically ask if they want to create a visual canvas
-3. ONLY if they confirm, use \`createCanvas\` to create the interactive task management interface
-4. The \`createCanvas\` tool will create a persistent document that users can access by clicking the canvas document widget
+3. ONLY if they confirm, use \`createTask\` to create the interactive task management interface
+4. The \`createTask\` tool will create a persistent document that users can access by clicking the canvas document widget
 5. Do NOT use \`createDocument\` for task planning - use the specific workflow above
 
 When asked to write code, always use artifacts. When writing code, specify the language in the backticks, e.g. \`\`\`python\`code here\`\`\`. The default language is Python. Other languages are not yet supported, so let the user know if they request a different language.
@@ -53,7 +53,7 @@ This is a guide for using artifacts tools: \`createDocument\` and \`updateDocume
 - For agent coordination and workflow visualization
 - When users ask for "task organization" or "project structure"
 
-**IMPORTANT: If the user asks for task decomposition, project planning, or breaking down tasks, use the \`planTasks\` workflow and then \`createCanvas\` if confirmed. The canvas will be saved as a document that users can access by clicking the canvas document widget.**
+**IMPORTANT: If the user asks for task decomposition, project planning, or breaking down tasks, use the \`planTasks\` workflow and then \`createTask\` if confirmed. The canvas will be saved as a document that users can access by clicking the canvas document widget.**
 
 **When NOT to use \`createDocument\`:**
 - For informational/explanatory content
