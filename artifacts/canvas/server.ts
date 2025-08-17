@@ -1,11 +1,6 @@
 import { createDocumentHandler } from '@/lib/artifacts/server';
 import type { CreateDocumentCallbackProps, UpdateDocumentCallbackProps } from '@/lib/artifacts/server';
 
-// Configuration
-const CONFIG = {
-  STREAMING_DELAY: 800, // ms between task streams
-} as const;
-
 export const canvasDocumentHandler = createDocumentHandler({
   kind: 'canvas',
   onCreateDocument: async ({ id, title, dataStream }: CreateDocumentCallbackProps) => {
@@ -16,6 +11,7 @@ export const canvasDocumentHandler = createDocumentHandler({
     
     // Initialize empty canvas structure
     const initialData = {
+      taskId: null, // Will be set when task is created
       tasks: [],
       agents: [],
       responses: [],
@@ -33,7 +29,13 @@ export const canvasDocumentHandler = createDocumentHandler({
   },
   onUpdateDocument: async ({ document, description, dataStream }: UpdateDocumentCallbackProps) => {
     // Updates will be handled by Python agent
-    const existingData = document.content ? JSON.parse(document.content) : { tasks: [], agents: [], responses: [], summary: null };
+    const existingData = document.content ? JSON.parse(document.content) : { 
+      taskId: null,
+      tasks: [], 
+      agents: [], 
+      responses: [], 
+      summary: null 
+    };
     
     // Just return existing data - Python agent handles all updates
     return JSON.stringify(existingData, null, 2);

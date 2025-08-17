@@ -79,10 +79,18 @@ export const createTask = ({ session, dataStream }: CreateTaskProps) =>
           data: JSON.stringify(jobData),
           transient: true,
         });
-        
-        // Small delay between jobs for visual effect
-        await new Promise(resolve => setTimeout(resolve, 200));
       }
+      
+      // Send completion confirmation to ensure all jobs are processed
+      dataStream.write({
+        type: 'data-textDelta',
+        data: JSON.stringify({ 
+          type: 'jobs-completed', 
+          taskId: id, 
+          totalJobs: jobs.length 
+        }),
+        transient: true,
+      });
 
       dataStream.write({ type: 'data-finish', data: null, transient: true });
 

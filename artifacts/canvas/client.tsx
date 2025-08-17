@@ -14,18 +14,6 @@ import type { Suggestion } from '@/lib/db/schema';
 import { toast } from 'sonner';
 import { getSuggestions } from '../actions';
 
-// Configuration constants
-const CONFIG = {
-  STREAMING: {
-    RESPONSE_INTERVAL: 30,  // ms between characters
-    SUMMARY_INTERVAL: 20,   // ms between characters
-    AGENT_STAGGER_DELAY: 200, // ms between agent starts
-  },
-  AGENT: {
-    NAME_MAX_LENGTH: 15,
-    NAME_TRUNCATE_LENGTH: 12,
-  },
-} as const;
 
 interface CanvasArtifactMetadata {
   taskId?: string; // The task ID from Python agent (for execution)
@@ -98,45 +86,86 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
             } else {
               console.warn('No taskId in parsedData for job:', parsedData.newJob.title);
             }
-            setMetadata((metadata) => ({
-              ...metadata,
-              taskId: parsedData.taskId || metadata?.taskId, // Set or preserve taskId
-              tasks: [...(metadata?.tasks || []), parsedData.newJob], // UI uses 'tasks' for jobs
-              // Add agent if job has one assigned
-              agents: parsedData.newJob.assignedAgent 
-                ? [...(metadata?.agents || []), { ...parsedData.newJob.assignedAgent, taskId: parsedData.newJob.id }]
-                : metadata?.agents || [],
-            }));
+            
+            // Use functional update to prevent race conditions
+            setMetadata((prevMetadata) => {
+              const currentTasks = prevMetadata?.tasks || [];
+              const currentAgents = prevMetadata?.agents || [];
+              
+              // Check if job already exists to prevent duplicates
+              if (currentTasks.some(task => task.id === parsedData.newJob.id)) {
+                console.log('Job already exists, skipping:', parsedData.newJob.title);
+                return prevMetadata;
+              }
+              
+              console.log(`Adding job ${currentTasks.length + 1}: ${parsedData.newJob.title}`);
+              
+              return {
+                ...prevMetadata,
+                taskId: parsedData.taskId || prevMetadata?.taskId, // Set or preserve taskId
+                tasks: [...currentTasks, parsedData.newJob], // UI uses 'tasks' for jobs
+                // Add agent if job has one assigned
+                agents: parsedData.newJob.assignedAgent 
+                  ? [...currentAgents, { ...parsedData.newJob.assignedAgent, taskId: parsedData.newJob.id }]
+                  : currentAgents,
+              };
+            });
           }
-          // Handle job response from agent execution
-          else if (parsedData.jobResponse) {
-            console.log('Received job response:', parsedData.jobResponse.agentId);
+          // Handle job response from agent execution (both legacy and standardized formats)
+          else if (parsedData.jobResponse || (parsedData.type === 'job-update' && parsedData.data)) {
+            const jobData = parsedData.jobResponse || parsedData.data;
+            console.log('Received job response:', jobData.agentId);
             setMetadata((metadata) => ({
               ...metadata,
               taskId: metadata?.taskId, // Preserve taskId
               responses: [...(metadata?.responses || []), {
-                ...parsedData.jobResponse,
-                timestamp: new Date(parsedData.jobResponse.timestamp),
+                ...jobData,
+                timestamp: new Date(jobData.timestamp),
               }],
               // Update job status if needed
               tasks: (metadata?.tasks || []).map(job => {
-                return job.id === parsedData.jobResponse.jobId
-                  ? { ...job, status: parsedData.jobResponse.status || 'completed' as const }
+                return job.id === jobData.jobId
+                  ? { ...job, status: jobData.status || 'completed' as const }
                   : job;
               }),
             }));
           }
-          // Handle summary
-          else if (parsedData.summary) {
-            console.log('Received summary');
+          // Handle summary (both legacy and standardized formats)
+          else if (parsedData.summary || (parsedData.type === 'summary-update' && parsedData.data)) {
+            const summaryData = parsedData.summary || parsedData.data;
+            console.log('Received summary update');
             setMetadata((metadata) => ({
               ...metadata,
               taskId: metadata?.taskId, // Preserve taskId
               summary: {
-                ...parsedData.summary,
-                timestamp: new Date(parsedData.summary.timestamp),
+                ...summaryData,
+                timestamp: new Date(summaryData.timestamp),
               },
             }));
+          }
+          // Handle job completion confirmation from createTask
+          else if (parsedData.type === 'jobs-completed') {
+            console.log(`All ${parsedData.totalJobs} jobs completed for task ${parsedData.taskId}`);
+            
+            // Validate that all jobs were received
+            setMetadata((prevMetadata) => {
+              const currentTasks = prevMetadata?.tasks || [];
+              const expectedCount = parsedData.totalJobs;
+              const actualCount = currentTasks.length;
+              
+              if (actualCount !== expectedCount) {
+                console.error(`Job count mismatch! Expected: ${expectedCount}, Actual: ${actualCount}`);
+                console.error('Current tasks:', currentTasks.map(t => t.title));
+                
+                // Could trigger a retry mechanism here if needed
+                toast.error(`Job streaming incomplete: ${actualCount}/${expectedCount} jobs received`);
+              } else {
+                console.log(`✅ All ${actualCount} jobs successfully received and processed`);
+                toast.success(`Canvas ready: ${actualCount} jobs loaded`);
+              }
+              
+              return prevMetadata;
+            });
           }
           // Handle complete data structure
           else if (parsedData.tasks) {
@@ -180,7 +209,13 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
         try {
           const parsedData = JSON.parse(content);
           if (parsedData.tasks) {
-            console.log('Loading saved canvas data');
+            console.log('Loading saved canvas data:', {
+              taskId: parsedData.taskId,
+              taskCount: parsedData.tasks.length,
+              agentCount: parsedData.agents?.length || 0,
+              responseCount: parsedData.responses?.length || 0,
+              hasSummary: !!parsedData.summary
+            });
             
             // Convert timestamps back to Date objects
             const responses = (parsedData.responses || []).map((response: any) => ({
@@ -195,12 +230,14 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
             
             setMetadata((metadata) => ({
               ...metadata,
-              taskId: metadata?.taskId, // Preserve taskId
+              taskId: parsedData.taskId || metadata?.taskId, // ✅ Load saved taskId or preserve current
               tasks: parsedData.tasks,
               agents: parsedData.agents || [],
               responses,
               summary,
             }));
+          } else {
+            console.log('No tasks found in saved content, content:', content?.substring(0, 100));
           }
         } catch (error) {
           console.error('Failed to parse canvas data:', error);
@@ -212,6 +249,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
     useEffect(() => {
       if (metadata?.tasks && metadata.tasks.length > 0 && onSaveContent) {
         const dataToSave = {
+          taskId: metadata.taskId, // ✅ Include taskId in saved data
           tasks: metadata.tasks,
           agents: metadata.agents || [],
           responses: metadata.responses || [],
@@ -221,7 +259,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
         const contentToSave = JSON.stringify(dataToSave, null, 2);
         
         if (contentToSave !== content) {
-          console.log('Saving canvas changes');
+          console.log('Saving canvas changes with taskId:', metadata.taskId);
           onSaveContent(contentToSave, true);
         }
       }
@@ -319,40 +357,43 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6));
-                
+                const eventType = typeof data.type === 'string' ? data.type.replace(/^data-/, '') : '';
+
                 // Handle different event types
-                if (data.type === 'execution-started') {
+                if (eventType === 'execution-started') {
                   console.log('Execution started:', data.message);
-                } else if (data.type === 'job-update') {
-                  // Update job status
-                  console.log('Job update:', data.data);
+                } else if (eventType === 'job-update' || data.type === 'job-update') {
+                  // Handle both old and new job-update formats
+                  const jobData = data.data || data;
+                  console.log('Job update:', jobData);
                   setMetadata((metadata) => ({
                     ...metadata,
                     taskId: metadata?.taskId, // Preserve taskId
                     responses: [...(metadata?.responses || []), {
-                      ...data.data,
-                      timestamp: new Date(data.data.timestamp),
+                      ...jobData,
+                      timestamp: new Date(jobData.timestamp),
                     }],
                     tasks: (metadata?.tasks || []).map(job => 
-                      job.id === data.data.jobId
-                        ? { ...job, status: data.data.status || 'completed' as const }
+                      job.id === jobData.jobId
+                        ? { ...job, status: jobData.status || 'completed' as const }
                         : job
                     ),
                   }));
-                } else if (data.type === 'summary-update') {
-                  // Update summary
-                  console.log('Summary update:', data.data);
+                } else if (eventType === 'summary-update' || data.type === 'summary-update') {
+                  // Handle both old and new summary-update formats
+                  const summaryData = data.data || data;
+                  console.log('Summary update:', summaryData);
                   setMetadata((metadata) => ({
                     ...metadata,
                     taskId: metadata?.taskId, // Preserve taskId
                     summary: {
-                      ...data.data,
-                      timestamp: new Date(data.data.timestamp),
+                      ...summaryData,
+                      timestamp: new Date(summaryData.timestamp),
                     },
                   }));
-                } else if (data.type === 'execution-completed') {
+                } else if (eventType === 'execution-completed') {
                   toast.success('Agent execution completed successfully');
-                } else if (data.type === 'execution-error') {
+                } else if (eventType === 'execution-error') {
                   throw new Error(data.error);
                 }
               } catch (parseError) {

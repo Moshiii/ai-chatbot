@@ -1,7 +1,8 @@
 import { auth } from '@/app/(auth)/auth';
 import { ChatSDKError } from '@/lib/errors';
 import { a2a } from '@/lib/ai/a2a-provider';
-import { createDataStreamResponse } from 'ai';
+import { createUIMessageStream, JsonToSseTransformStream } from 'ai';
+import type { ChatMessage } from '@/lib/types';
 
 export const maxDuration = 60;
 
@@ -99,85 +100,81 @@ export async function POST(request: Request) {
 
     console.log('[Agent Execution API] Sending to Python Task Agent:', executionMessage);
     
-    // 9. Create a data stream for real-time updates
-    // This creates a proper SSE stream that the canvas can consume
-    return createDataStreamResponse({
-      execute: async (dataStream) => {
-        console.log('[Agent Execution API] Starting streaming execution');
-        
-        try {
-          // Send initial status
-          dataStream.writeData({
-            type: 'execution-started',
-            taskId,
-            message: 'Starting agent execution'
-          });
+    // 9. Create a data stream for real-time updates using AI SDK helper
+    const stream = createUIMessageStream<ChatMessage>({
+      execute: ({ writer }) => {
+        (async () => {
+          console.log('[Agent Execution API] Starting streaming execution');
+          try {
+            // Send initial status as text delta
+            writer.write({ 
+              type: 'data-textDelta', 
+              data: JSON.stringify({ type: 'execution-started', taskId, message: 'Starting agent execution' })
+            });
 
-          // Execute through Python agent
-          const result = await provider.doStream({
-            inputFormat: 'messages',
-            mode: { type: 'regular' },
-            prompt: [
-              {
-                role: 'user' as const,
-                content: JSON.stringify(executionMessage),
-              },
-            ],
-          });
+            // Execute through Python agent
+            const result = await provider.doStream({
+              prompt: [
+                {
+                  role: 'user' as const,
+                  content: [
+                    { type: 'text' as const, text: JSON.stringify(executionMessage) },
+                  ],
+                },
+              ],
+            });
 
-          // Process the stream and forward relevant events
-          const reader = result.stream.getReader();
-          
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            // Check if this is a tool call result
-            if (value && typeof value === 'object') {
-              if (value.type === 'tool-call' && value.toolName === 'updateTask') {
-                // Forward updateTask data to canvas
-                const toolArgs = JSON.parse(value.input || '{}');
-                if (toolArgs.jobResponse) {
-                  dataStream.writeData({
-                    type: 'job-update',
-                    data: toolArgs.jobResponse
-                  });
-                } else if (toolArgs.summary) {
-                  dataStream.writeData({
-                    type: 'summary-update',
-                    data: toolArgs.summary
-                  });
+            // Process the stream and forward relevant events
+            const reader = result.stream.getReader();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value && typeof value === 'object') {
+                if (value.type === 'tool-call' && value.toolName === 'updateTask') {
+                  const toolArgs = JSON.parse((value as any).input || '{}');
+                  if (toolArgs.jobResponse) {
+                    // Forward job response update with standardized event type
+                    writer.write({ 
+                      type: 'data-textDelta', 
+                      data: JSON.stringify({ 
+                        type: 'job-update',
+                        data: toolArgs.jobResponse 
+                      })
+                    });
+                  } else if (toolArgs.summary) {
+                    // Forward summary update with standardized event type
+                    writer.write({ 
+                      type: 'data-textDelta', 
+                      data: JSON.stringify({ 
+                        type: 'summary-update',
+                        data: toolArgs.summary 
+                      })
+                    });
+                  }
                 }
               }
             }
-          }
 
-          // Send completion status
-          dataStream.writeData({
-            type: 'execution-completed',
-            taskId,
-            message: 'Agent execution completed'
-          });
-          
-          console.log('[Agent Execution API] Streaming execution completed');
-        } catch (error: any) {
-          console.error('[Agent Execution API] Streaming error:', error);
-          
-          dataStream.writeData({
-            type: 'execution-error',
-            error: error.message || 'Execution failed',
-            taskId
-          });
-        }
+            // Send completion status
+            writer.write({ 
+              type: 'data-textDelta', 
+              data: JSON.stringify({ type: 'execution-completed', taskId, message: 'Agent execution completed' })
+            });
+            console.log('[Agent Execution API] Streaming execution completed');
+          } catch (error: unknown) {
+            console.error('[Agent Execution API] Streaming error:', error);
+            writer.write({ 
+              type: 'data-textDelta', 
+              data: JSON.stringify({ type: 'execution-error', error: (error as Error)?.message || 'Execution failed', taskId })
+            });
+          }
+        })();
       },
-      onError: (error) => {
-        console.error('[Agent Execution API] Stream error:', error);
-        return JSON.stringify({
-          error: 'Stream error',
-          message: error.message
-        });
-      }
     });
+
+    return new Response(
+      stream.pipeThrough(new JsonToSseTransformStream())
+    );
     
   } catch (error) {
     console.error('[Agent Execution API] Error:', error);
