@@ -185,7 +185,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
 
         return {
           ...draftArtifact,
-          content: streamPart.data,
+          // Don't set content for canvas - it uses metadata instead
           status: 'streaming',
         };
       });

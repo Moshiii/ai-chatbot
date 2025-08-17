@@ -67,7 +67,7 @@ export const createTask = ({ session, dataStream }: CreateTaskProps) =>
         session,
       });
 
-      // Stream jobs to the canvas UI with taskId
+      // Stream individual jobs for real-time UI updates
       for (const job of jobs) {
         const jobData = { 
           newJob: job,

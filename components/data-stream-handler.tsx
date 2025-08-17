@@ -64,8 +64,9 @@ export function DataStreamHandler() {
               ...draftArtifact,
               kind: delta.data,
               status: 'streaming',
-              // Don't auto-switch to canvas mode - let user click the document widget
-              isVisible: draftArtifact.isVisible,
+              // Auto-open canvas to ensure it receives streaming events
+              // Otherwise jobs streamed while canvas is closed will be lost
+              isVisible: delta.data === 'canvas' ? true : draftArtifact.isVisible,
             };
 
           case 'data-clear':

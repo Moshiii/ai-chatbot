@@ -4,14 +4,12 @@ import type { CreateDocumentCallbackProps, UpdateDocumentCallbackProps } from '@
 export const canvasDocumentHandler = createDocumentHandler({
   kind: 'canvas',
   onCreateDocument: async ({ id, title, dataStream }: CreateDocumentCallbackProps) => {
-    // The Python agent will provide the task breakdown with pre-assigned agents
-    // This function now just initializes the canvas and waits for data from Python
-    
     console.log(`Creating canvas: ${title}`);
     
-    // Initialize empty canvas structure
+    // Initialize canvas structure with the task ID
+    // The actual jobs will be streamed immediately after by createTask
     const initialData = {
-      taskId: null, // Will be set when task is created
+      taskId: id, // Use document ID as task ID
       tasks: [],
       agents: [],
       responses: [],
