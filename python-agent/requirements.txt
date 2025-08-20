@@ -1,0 +1,17 @@
+# A2A SDK and core dependencies (with HTTP server support)
+a2a-sdk[http-server]>=0.3.0
+
+# HTTP client for API requests
+httpx>=0.28.1
+
+# Data validation and serialization
+pydantic>=2.11.4
+
+# ASGI server for running the agent
+uvicorn>=0.32.1
+
+# CLI framework (if needed for future enhancements)
+click>=8.1.8
+
+# Additional useful packages for development
+python-dotenv>=1.0.0
