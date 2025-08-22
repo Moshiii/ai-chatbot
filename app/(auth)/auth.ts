@@ -1,9 +1,11 @@
 import NextAuth, { type DefaultSession } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { createGuestUser } from '@/lib/db/queries';
+import { createGuestUser, db } from '@/lib/db/queries';
 import { authConfig } from './auth.config';
 import type { DefaultJWT } from 'next-auth/jwt';
-import GitHub from "next-auth/providers/github"
+import GitHub from 'next-auth/providers/github';
+import { user } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 
 export type UserType = 'guest' | 'regular';
 
@@ -34,7 +36,9 @@ declare module 'next-auth/jwt' {
 
 // Validate required environment variables
 if (!process.env.AUTH_GITHUB_ID || !process.env.AUTH_GITHUB_SECRET) {
-  throw new Error('Missing required GitHub OAuth environment variables: AUTH_GITHUB_ID and AUTH_GITHUB_SECRET');
+  throw new Error(
+    'Missing required GitHub OAuth environment variables: AUTH_GITHUB_ID and AUTH_GITHUB_SECRET',
+  );
 }
 
 export const {
@@ -59,11 +63,49 @@ export const {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id as string;
-        token.type = user.type;
-        token.creditBalance = user.creditBalance;
+    async jwt({ token, user: authUser, account }) {
+      if (authUser) {
+        token.id = authUser.id as string;
+        token.type = authUser.type;
+        token.creditBalance = authUser.creditBalance;
+      }
+
+      // Handle GitHub OAuth user creation
+      if (account?.provider === 'github' && !token.id && token.email) {
+        try {
+          // Check if user already exists
+          const existingUsers = await db
+            .select()
+            .from(user)
+            .where(eq(user.email, token.email));
+
+          if (existingUsers.length > 0) {
+            // User exists, use their data
+            const existingUser = existingUsers[0];
+            token.id = existingUser.id;
+            token.type = 'regular';
+            token.creditBalance = existingUser.creditBalance;
+          } else {
+            // Create new user for GitHub OAuth
+            const [newUser] = await db
+              .insert(user)
+              .values({
+                email: token.email,
+                creditBalance: '0.00',
+              })
+              .returning({
+                id: user.id,
+                email: user.email,
+                creditBalance: user.creditBalance,
+              });
+
+            token.id = newUser.id;
+            token.type = 'regular';
+            token.creditBalance = newUser.creditBalance;
+          }
+        } catch (error) {
+          console.error('Error creating/finding GitHub user:', error);
+        }
       }
 
       return token;
@@ -90,7 +132,7 @@ export const {
         return `${baseUrl}/`;
       }
       // Allows relative callback URLs
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (url.startsWith('/')) return `${baseUrl}${url}`;
       // Allows callback URLs on the same origin
       if (new URL(url).origin === baseUrl) return url;
       return baseUrl;

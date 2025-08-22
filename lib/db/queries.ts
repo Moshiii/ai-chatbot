@@ -42,6 +42,9 @@ import { ChatSDKError } from '../errors';
 const client = postgres(process.env.POSTGRES_URL!);
 const db = drizzle(client);
 
+// Export db instance for NextAuth.js adapter
+export { db };
+
 export async function getUser(email: string): Promise<Array<User>> {
   try {
     return await db.select().from(user).where(eq(user.email, email));
@@ -93,7 +96,7 @@ export async function saveChat({
   visibility: VisibilityType;
 }) {
   try {
-    return await db.insert(chat).values({
+    return db.insert(chat).values({
       id,
       createdAt: new Date(),
       userId,
@@ -101,6 +104,7 @@ export async function saveChat({
       visibility,
     });
   } catch (error) {
+    console.error('Database error in saveChat:', error);
     throw new ChatSDKError('bad_request:database', 'Failed to save chat');
   }
 }
@@ -240,10 +244,12 @@ export async function voteMessage({
   chatId,
   messageId,
   type,
+  userId,
 }: {
   chatId: string;
   messageId: string;
   type: 'up' | 'down';
+  userId: string;
 }) {
   try {
     const [existingVote] = await db
@@ -254,13 +260,14 @@ export async function voteMessage({
     if (existingVote) {
       return await db
         .update(vote)
-        .set({ isUpvoted: type === 'up' })
+        .set({ value: type })
         .where(and(eq(vote.messageId, messageId), eq(vote.chatId, chatId)));
     }
     return await db.insert(vote).values({
       chatId,
       messageId,
-      isUpvoted: type === 'up',
+      value: type,
+      userId,
     });
   } catch (error) {
     throw new ChatSDKError('bad_request:database', 'Failed to vote message');

@@ -69,6 +69,7 @@ export async function PATCH(request: Request) {
     chatId,
     messageId,
     type: type,
+    userId: session.user.id,
   });
 
   return new Response('Message voted', { status: 200 });
