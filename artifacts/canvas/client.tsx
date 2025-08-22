@@ -42,6 +42,7 @@ interface CanvasArtifactMetadata {
     content: string;
     timestamp: Date;
   } | null;
+  isInitialDataLoaded?: boolean; // New flag to prevent re-processing loaded data
 }
 
 export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
@@ -58,6 +59,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       agents: [],
       responses: [],
       summary: null,
+      isInitialDataLoaded: false, // Initialize the flag
     });
   },
   onStreamPart: ({ streamPart, setMetadata, setArtifact }) => {
@@ -242,6 +244,48 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
               summary: parsedData.summary || null,
             }));
           }
+          // Handle loading saved data from server
+          else if (parsedData.type === 'load-saved-data') {
+            setMetadata((currentMetadata) => {
+              if (currentMetadata?.isInitialDataLoaded) {
+                console.log('[Canvas] Initial data already loaded, skipping.');
+                return currentMetadata;
+              }
+
+              console.log('[Canvas] Loading saved data from server:', {
+                taskId: parsedData.taskId,
+                taskCount: parsedData.tasks?.length || 0,
+                agentCount: parsedData.agents?.length || 0,
+                responseCount: parsedData.responses?.length || 0,
+                hasSummary: !!parsedData.summary,
+              });
+
+              // Convert timestamps back to Date objects
+              const responses = (parsedData.responses || []).map(
+                (response: any) => ({
+                  ...response,
+                  timestamp: new Date(response.timestamp),
+                }),
+              );
+
+              const summary = parsedData.summary
+                ? {
+                    ...parsedData.summary,
+                    timestamp: new Date(parsedData.summary.timestamp),
+                  }
+                : null;
+
+              return {
+                ...currentMetadata,
+                taskId: parsedData.taskId || currentMetadata?.taskId,
+                tasks: parsedData.tasks || [],
+                agents: parsedData.agents || [],
+                responses,
+                summary,
+                isInitialDataLoaded: true, // Mark as loaded
+              };
+            });
+          }
         } catch (error) {
           // Not JSON, likely streaming text - log for debugging but don't break
           console.log(
@@ -270,71 +314,6 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
     metadata,
     setMetadata,
   }) => {
-    // Load saved canvas data when opened (simplified without useEffect)
-    if (content && (!metadata?.tasks || metadata.tasks.length === 0)) {
-      try {
-        const parsedData = JSON.parse(content);
-        if (parsedData.tasks) {
-          console.log('Loading saved canvas data:', {
-            taskId: parsedData.taskId,
-            taskCount: parsedData.tasks.length,
-            agentCount: parsedData.agents?.length || 0,
-            responseCount: parsedData.responses?.length || 0,
-            hasSummary: !!parsedData.summary,
-          });
-
-          // Convert timestamps back to Date objects
-          const responses = (parsedData.responses || []).map(
-            (response: any) => ({
-              ...response,
-              timestamp: new Date(response.timestamp),
-            }),
-          );
-
-          const summary = parsedData.summary
-            ? {
-                ...parsedData.summary,
-                timestamp: new Date(parsedData.summary.timestamp),
-              }
-            : null;
-
-          setMetadata((metadata) => ({
-            ...metadata,
-            taskId: parsedData.taskId || metadata?.taskId, // ✅ Load saved taskId or preserve current
-            tasks: parsedData.tasks,
-            agents: parsedData.agents || [],
-            responses,
-            summary,
-          }));
-        } else {
-          console.log(
-            'No tasks found in saved content, content:',
-            content?.substring(0, 100),
-          );
-        }
-      } catch (error) {
-        console.error('Failed to parse canvas data:', error);
-      }
-    }
-
-    // Auto-save changes when metadata changes (simplified without useEffect)
-    if (metadata?.tasks && metadata.tasks.length > 0 && onSaveContent) {
-      const dataToSave = {
-        taskId: metadata.taskId, // ✅ Include taskId in saved data
-        tasks: metadata.tasks,
-        agents: metadata.agents || [],
-        responses: metadata.responses || [],
-        summary: metadata.summary || null,
-      };
-
-      const contentToSave = JSON.stringify(dataToSave, null, 2);
-
-      if (contentToSave !== content) {
-        console.log('Saving canvas changes with taskId:', metadata.taskId);
-        onSaveContent(contentToSave, true);
-      }
-    }
-
     if (isLoading) {
       return <DocumentSkeleton artifactKind="canvas" />;
     }

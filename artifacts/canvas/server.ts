@@ -43,7 +43,40 @@ export const canvasDocumentHandler = createDocumentHandler({
     description,
     dataStream,
   }: UpdateDocumentCallbackProps) => {
-    // Updates will be handled by Python agent
+    // Load existing canvas data when document is opened
+    if (document.content) {
+      try {
+        const existingData = JSON.parse(document.content);
+
+        // If we have saved data, stream it to the client to load into metadata
+        if (existingData.tasks && existingData.tasks.length > 0) {
+          console.log('[Canvas Handler] Loading saved canvas data:', {
+            taskId: existingData.taskId,
+            taskCount: existingData.tasks.length,
+            agentCount: existingData.agents?.length || 0,
+            responseCount: existingData.responses?.length || 0,
+            hasSummary: !!existingData.summary,
+          });
+
+          // Stream the saved data to the client
+          dataStream.write({
+            type: 'data-textDelta',
+            data: JSON.stringify({
+              type: 'load-saved-data',
+              ...existingData,
+            }),
+            transient: true,
+          });
+        }
+      } catch (error) {
+        console.error(
+          '[Canvas Handler] Failed to parse saved canvas data:',
+          error,
+        );
+      }
+    }
+
+    // Return existing data - Python agent handles all updates
     const existingData = document.content
       ? JSON.parse(document.content)
       : {
@@ -54,7 +87,6 @@ export const canvasDocumentHandler = createDocumentHandler({
           summary: null,
         };
 
-    // Just return existing data - Python agent handles all updates
     return JSON.stringify(existingData, null, 2);
   },
 });

@@ -17,7 +17,8 @@ import {
   saveChat,
   saveMessages,
 } from '@/lib/db/queries';
-import { convertToUIMessages, generateUUID } from '@/lib/utils';
+import { convertToUIMessages } from '@/lib/utils';
+import { generateChatIds } from '@/lib/id-management';
 import { generateTitleFromUserMessage } from '../../actions';
 import { createDocument } from '@/lib/ai/tools/create-document';
 import { updateDocument } from '@/lib/ai/tools/update-document';
@@ -152,7 +153,8 @@ export async function POST(request: Request) {
       ],
     });
 
-    const streamId = generateUUID();
+    const chatIds = generateChatIds();
+    const streamId = chatIds.generateStreamId().databaseId;
     await createStreamId({ streamId, chatId: id });
 
     const stream = createUIMessageStream({
@@ -196,10 +198,11 @@ export async function POST(request: Request) {
         dataStream.merge(
           result.toUIMessageStream({
             sendReasoning: true,
+            originalMessages: uiMessages, // Fix for AI SDK v5 to prevent repeated assistant messages with tools
           }),
         );
       },
-      generateId: generateUUID,
+      generateId: () => chatIds.generateMessageId().databaseId,
       onFinish: async ({ messages }) => {
         await saveMessages({
           messages: messages.map((message) => ({

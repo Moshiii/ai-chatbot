@@ -1,9 +1,9 @@
-import { generateUUID } from '@/lib/utils';
 import { tool, type UIMessageStreamWriter } from 'ai';
 import { z } from 'zod';
 import type { Session } from 'next-auth';
 import type { ChatMessage } from '@/lib/types';
 import { documentHandlersByArtifactKind } from '@/lib/artifacts/server';
+import { generateTaskIds } from '@/lib/id-management';
 
 interface CreateTaskProps {
   session: Session;
@@ -52,27 +52,27 @@ export const createTask = ({ session, dataStream }: CreateTaskProps) =>
     }),
     execute: async ({ title, taskId, jobs }) => {
       try {
-        // Always generate a UUID for the document ID to ensure database compatibility
-        const documentId = generateUUID();
-        // Use taskId for referencing/naming, but documentId for database operations
-        const actualTaskId = taskId || documentId;
-        console.log(
-          '[createTask] Creating task with documentId:',
-          documentId,
-          'taskId:',
-          actualTaskId,
-          'title:',
+        // Generate proper IDs using the new ID management system
+        const ids = generateTaskIds(title, taskId);
+        console.log('[createTask] Creating task:', {
           title,
-          'jobs:',
-          jobs.length,
-        );
+          documentId: ids.document.databaseId,
+          taskReferenceId: ids.task.referenceId,
+          requestedTaskId: taskId,
+          jobCount: jobs.length,
+        });
 
         if (!jobs || jobs.length === 0) {
           throw new Error('Jobs array is required and cannot be empty');
         }
 
         // Initialize document stream for canvas
-        initializeDocumentStream(dataStream, documentId, title, 'canvas');
+        initializeDocumentStream(
+          dataStream,
+          ids.document.databaseId,
+          title,
+          'canvas',
+        );
 
         // Find the canvas document handler
         const documentHandler = documentHandlersByArtifactKind.find(
@@ -86,7 +86,7 @@ export const createTask = ({ session, dataStream }: CreateTaskProps) =>
         // Create the canvas document first
         console.log('[createTask] Creating canvas document...');
         await documentHandler.onCreateDocument({
-          id: documentId,
+          id: ids.document.databaseId,
           title,
           dataStream,
           session,
@@ -95,18 +95,18 @@ export const createTask = ({ session, dataStream }: CreateTaskProps) =>
         // Small delay to ensure canvas is ready
         await new Promise((resolve) => setTimeout(resolve, 100));
 
-        // Stream jobs to the canvas UI with taskId
+        // Stream jobs to the canvas UI with proper task reference
         console.log('[createTask] Starting to stream', jobs.length, 'jobs...');
         for (const [index, job] of jobs.entries()) {
           const jobData = {
             newJob: job,
-            taskId: actualTaskId, // Include taskId with each job
+            taskId: ids.task.referenceId || ids.task.databaseId, // Use reference ID for task coordination
           };
           console.log(
             `[createTask] Streaming job ${index + 1}/${jobs.length}:`,
             job.title,
             'with taskId:',
-            actualTaskId,
+            ids.task.referenceId || ids.task.databaseId,
           );
           try {
             dataStream.write({
@@ -129,7 +129,7 @@ export const createTask = ({ session, dataStream }: CreateTaskProps) =>
           type: 'data-textDelta',
           data: JSON.stringify({
             type: 'jobs-completed',
-            taskId: actualTaskId,
+            taskId: ids.task.referenceId || ids.task.databaseId,
             totalJobs: jobs.length,
           }),
           transient: true,
@@ -138,10 +138,12 @@ export const createTask = ({ session, dataStream }: CreateTaskProps) =>
         dataStream.write({ type: 'data-finish', data: null, transient: true });
 
         return {
-          id: documentId,
+          id: ids.document.databaseId,
           title,
           kind: 'canvas',
-          taskId: actualTaskId,
+          taskId: ids.task.referenceId || ids.task.databaseId,
+          documentId: ids.document.databaseId,
+          taskReference: ids.task.referenceId,
           jobCount: jobs.length,
           message: `Task "${title}" created with ${jobs.length} jobs. Ready for agent execution.`,
         };
