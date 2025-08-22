@@ -23,7 +23,6 @@ import { createDocument } from '@/lib/ai/tools/create-document';
 import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
-import { planTasks } from '@/lib/ai/tools/plan-tasks';
 import { createTask } from '@/lib/ai/tools/create-task';
 import { updateTask } from '@/lib/ai/tools/update-task';
 import { isProductionEnvironment } from '@/lib/constants';
@@ -52,7 +51,10 @@ export function getStreamContext() {
         waitUntil: after,
       });
     } catch (error: any) {
-      if (error.message.includes('REDIS_URL') || error.message.includes('Invalid URL')) {
+      if (
+        error.message.includes('REDIS_URL') ||
+        error.message.includes('Invalid URL')
+      ) {
         console.log(
           ' > Resumable streams are disabled due to missing or invalid REDIS_URL',
         );
@@ -165,17 +167,15 @@ export async function POST(request: Request) {
               ? []
               : [
                   'getWeather',
-                  'planTasks',
-                  'createTask',
+                  'createTask', // Primary tool for task planning
                   'updateTask',
-                  'createDocument',
+                  'createDocument', // Keep for non-task workflows
                   'updateDocument',
                   'requestSuggestions',
                 ],
           experimental_transform: smoothStream({ chunking: 'word' }),
           tools: {
             getWeather,
-            planTasks: planTasks({ session, dataStream }),
             createTask: createTask({ session, dataStream }),
             updateTask: updateTask({ session, dataStream }),
             createDocument: createDocument({ session, dataStream }),
@@ -232,7 +232,7 @@ export async function POST(request: Request) {
     if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
-    
+
     console.error('Unexpected error in chat route:', error);
     return new ChatSDKError('bad_request:chat').toResponse();
   }
