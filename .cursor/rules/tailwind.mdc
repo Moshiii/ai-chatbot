@@ -85,3 +85,4 @@ alwaysApply: false
 - Implement proper testing
 - Follow accessibility guidelines
 - Use proper version control
+- Use latest shorthand syntaxt when possible
