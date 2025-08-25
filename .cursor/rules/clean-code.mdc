@@ -1,5 +1,6 @@
 ---
 description: Guidelines for writing clean, maintainable, and human-readable code. Apply these rules when writing or reviewing code to ensure consistency and quality.
+
 globs:
 ---
 
@@ -122,3 +123,4 @@ Always provide links to the real files, not x.md.
 ## No Current Implementation
 
 Don't show or discuss the current implementation unless specifically requested.
+

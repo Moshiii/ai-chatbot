@@ -83,6 +83,7 @@ export const createTask = ({ session, dataStream }: CreateTaskProps) =>
           throw new Error('No document handler found for canvas kind');
         }
 
+
         // Create the canvas document first
         console.log('[createTask] Creating canvas document...');
         await documentHandler.onCreateDocument({
@@ -125,6 +126,7 @@ export const createTask = ({ session, dataStream }: CreateTaskProps) =>
         }
 
         // Send completion confirmation to ensure all jobs are processed
+
         dataStream.write({
           type: 'data-textDelta',
           data: JSON.stringify({

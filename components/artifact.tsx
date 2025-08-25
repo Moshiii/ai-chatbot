@@ -113,7 +113,10 @@ function PureArtifact({
         setCurrentVersionIndex(documents.length - 1);
         setArtifact((currentArtifact) => ({
           ...currentArtifact,
-          content: mostRecentDocument.content ?? '',
+          // Don't overwrite content for canvas - it uses metadata instead
+          content: currentArtifact.kind === 'canvas' 
+            ? currentArtifact.content 
+            : mostRecentDocument.content ?? '',
         }));
       }
     }

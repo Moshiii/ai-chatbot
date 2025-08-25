@@ -3,9 +3,11 @@ description: Tailwind CSS and UI component best practices for modern web applica
 alwaysApply: false
 ---
 
+
 # Tailwind CSS Best Practices
 
 ## Project Setup
+
 
 - Use proper Tailwind configuration
 - Configure theme extension properly
@@ -86,3 +88,4 @@ alwaysApply: false
 - Follow accessibility guidelines
 - Use proper version control
 - Use latest shorthand syntaxt when possible
+

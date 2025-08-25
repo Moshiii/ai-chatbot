@@ -6,6 +6,7 @@ import type {
 
 export const canvasDocumentHandler = createDocumentHandler({
   kind: 'canvas',
+
   onCreateDocument: async ({
     id,
     title,
