@@ -1,7 +1,14 @@
 'use client';
 
-import React, { useCallback, useMemo, useEffect, useRef, useState } from 'react';
-import ReactFlow, {
+import React, {
+  useCallback,
+  useMemo,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import {
+  ReactFlow,
   type Node,
   type Edge,
   Controls,
@@ -19,8 +26,27 @@ import 'reactflow/dist/style.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PlayIcon, CheckIcon, ClockIcon, FileTextIcon, BarChart3Icon, UserPlusIcon, ChevronDown, ChevronUp, RocketIcon } from 'lucide-react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import {
+  PlayIcon,
+  CheckIcon,
+  ClockIcon,
+  FileTextIcon,
+  BarChart3Icon,
+  UserPlusIcon,
+  ChevronDown,
+  ChevronUp,
+  RocketIcon,
+} from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Layout configuration for node positioning
 const LAYOUT = {
@@ -47,10 +73,22 @@ const LAYOUT = {
 const STYLES = {
   EDGES: {
     TASK_CHAIN: { stroke: '#3b82f6', strokeWidth: 3 },
-    TASK_TO_SUMMARY: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' },
-    TASK_TO_AGENT: { stroke: '#10b981', strokeWidth: 3, strokeDasharray: '3,3' },
+    TASK_TO_SUMMARY: {
+      stroke: '#8b5cf6',
+      strokeWidth: 3,
+      strokeDasharray: '5,5',
+    },
+    TASK_TO_AGENT: {
+      stroke: '#10b981',
+      strokeWidth: 3,
+      strokeDasharray: '3,3',
+    },
     AGENT_TO_RESPONSE: { stroke: '#f59e0b', strokeWidth: 3 },
-    TITLE_TO_TASK: { stroke: '#8b5cf6', strokeWidth: 3, strokeDasharray: '5,5' },
+    TITLE_TO_TASK: {
+      stroke: '#8b5cf6',
+      strokeWidth: 3,
+      strokeDasharray: '5,5',
+    },
   },
   HANDLES: {
     DEFAULT: { width: '12px', height: '12px' },
@@ -104,7 +142,9 @@ interface CanvasFlowProps {
 }
 
 // Custom Task Decomposition Title Node Component with Vertical Handles
-const TaskDecompositionTitleNode = ({ data }: { data: { isGenerating?: boolean } }) => {
+const TaskDecompositionTitleNode = ({
+  data,
+}: { data: { isGenerating?: boolean } }) => {
   return (
     <Card className="w-64 bg-white shadow-lg border-2 border-purple-200 relative">
       {/* Output handle on the bottom */}
@@ -112,26 +152,30 @@ const TaskDecompositionTitleNode = ({ data }: { data: { isGenerating?: boolean }
         type="source"
         position={Position.Bottom}
         id="task-decomposition-title-output"
-        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.PURPLE }}
+        style={{
+          ...STYLES.HANDLES.DEFAULT,
+          background: STYLES.HANDLES.COLORS.PURPLE,
+        }}
       />
-      
+
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-semibold text-purple-800">
             Task Decomposition
           </CardTitle>
           {data?.isGenerating && (
-            <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-xs">
-              <ClockIcon className="w-3 h-3 mr-1" />
+            <Badge
+              variant="secondary"
+              className="bg-purple-100 text-purple-800 text-xs"
+            >
+              <ClockIcon className="size-3 mr-1" />
               Generating
             </Badge>
           )}
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="text-xs text-gray-600">
-          Workflow Steps
-        </div>
+        <div className="text-xs text-gray-600">Workflow Steps</div>
       </CardContent>
     </Card>
   );
@@ -147,29 +191,41 @@ const TaskNode = ({ data }: { data: { task: Task } }) => {
         type="target"
         position={Position.Top}
         id={`task-${data.task.id}-input-top`}
-        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.PURPLE }}
+        style={{
+          ...STYLES.HANDLES.DEFAULT,
+          background: STYLES.HANDLES.COLORS.PURPLE,
+        }}
       />
       <Handle
         type="target"
         position={Position.Left}
         id={`task-${data.task.id}-input-left`}
-        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.PURPLE }}
+        style={{
+          ...STYLES.HANDLES.DEFAULT,
+          background: STYLES.HANDLES.COLORS.PURPLE,
+        }}
       />
-      
+
       {/* Output handles */}
       <Handle
         type="source"
         position={Position.Bottom}
         id={`task-${data.task.id}-output-bottom`}
-        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.BLUE }}
+        style={{
+          ...STYLES.HANDLES.DEFAULT,
+          background: STYLES.HANDLES.COLORS.BLUE,
+        }}
       />
       <Handle
         type="source"
         position={Position.Right}
         id={`task-${data.task.id}-output-right`}
-        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.BLUE }}
+        style={{
+          ...STYLES.HANDLES.DEFAULT,
+          background: STYLES.HANDLES.COLORS.BLUE,
+        }}
       />
-      
+
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-semibold text-blue-800">
@@ -177,26 +233,38 @@ const TaskNode = ({ data }: { data: { task: Task } }) => {
           </CardTitle>
           <div className="flex items-center gap-2">
             {data.task.status === 'pending' && (
-              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-xs">
-                <ClockIcon className="w-3 h-3 mr-1" />
+              <Badge
+                variant="secondary"
+                className="bg-yellow-100 text-yellow-800 text-xs"
+              >
+                <ClockIcon className="size-3 mr-1" />
                 Pending
               </Badge>
             )}
             {data.task.status === 'recruiting' && (
-              <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-xs">
-                <UserPlusIcon className="w-3 h-3 mr-1" />
+              <Badge
+                variant="secondary"
+                className="bg-purple-100 text-purple-800 text-xs"
+              >
+                <UserPlusIcon className="size-3 mr-1" />
                 Recruiting
               </Badge>
             )}
             {data.task.status === 'in-progress' && (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
-                <PlayIcon className="w-3 h-3 mr-1" />
+              <Badge
+                variant="secondary"
+                className="bg-blue-100 text-blue-800 text-xs"
+              >
+                <PlayIcon className="size-3 mr-1" />
                 Active
               </Badge>
             )}
             {data.task.status === 'completed' && (
-              <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
-                <CheckIcon className="w-3 h-3 mr-1" />
+              <Badge
+                variant="secondary"
+                className="bg-green-100 text-green-800 text-xs"
+              >
+                <CheckIcon className="size-3 mr-1" />
                 Completed
               </Badge>
             )}
@@ -204,13 +272,15 @@ const TaskNode = ({ data }: { data: { task: Task } }) => {
               variant="ghost"
               size="icon"
               onClick={() => setExpanded((prev) => !prev)}
-              className="h-6 w-6 p-0"
-              aria-label={expanded ? 'Collapse task details' : 'Expand task details'}
+              className="size-6 p-0"
+              aria-label={
+                expanded ? 'Collapse task details' : 'Expand task details'
+              }
             >
               {expanded ? (
-                <ChevronUp className="h-4 w-4" />
+                <ChevronUp className="size-4" />
               ) : (
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="size-4" />
               )}
             </Button>
           </div>
@@ -218,7 +288,9 @@ const TaskNode = ({ data }: { data: { task: Task } }) => {
       </CardHeader>
       <CardContent className="pt-0">
         {expanded && (
-          <div className="text-xs text-gray-600 mb-2">{data.task.description}</div>
+          <div className="text-xs text-gray-600 mb-2">
+            {data.task.description}
+          </div>
         )}
       </CardContent>
     </Card>
@@ -262,11 +334,24 @@ const AgentCardNode = ({ data }: { data: { agent: Agent } }) => {
     return typeof data.agent.pricingUsdt === 'number'
       ? data.agent.pricingUsdt
       : generatePriceFromId(`${data.agent.id}:${data.agent.name}`);
-  }, [data.agent.id, data.agent.name, data.agent.pricingUsdt, generatePriceFromId]);
+  }, [
+    data.agent.id,
+    data.agent.name,
+    data.agent.pricingUsdt,
+    generatePriceFromId,
+  ]);
 
   const walletAddress = useMemo(() => {
-    return data.agent.walletAddress || generateWalletFromId(`${data.agent.id}:${data.agent.name}`);
-  }, [data.agent.id, data.agent.name, data.agent.walletAddress, generateWalletFromId]);
+    return (
+      data.agent.walletAddress ||
+      generateWalletFromId(`${data.agent.id}:${data.agent.name}`)
+    );
+  }, [
+    data.agent.id,
+    data.agent.name,
+    data.agent.walletAddress,
+    generateWalletFromId,
+  ]);
 
   return (
     <Card className="w-72 bg-white shadow-lg border-2 border-green-200 relative">
@@ -275,33 +360,43 @@ const AgentCardNode = ({ data }: { data: { agent: Agent } }) => {
         type="target"
         position={Position.Left}
         id={`agent-${data.agent.id}-input`}
-        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.BLUE }}
+        style={{
+          ...STYLES.HANDLES.DEFAULT,
+          background: STYLES.HANDLES.COLORS.BLUE,
+        }}
       />
       <Handle
         type="source"
         position={Position.Right}
         id={`agent-${data.agent.id}-output`}
-        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.ORANGE }}
+        style={{
+          ...STYLES.HANDLES.DEFAULT,
+          background: STYLES.HANDLES.COLORS.ORANGE,
+        }}
       />
-      
+
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold text-green-800">
             {data.agent.name}
           </CardTitle>
-          <span className="text-xs font-bold text-gray-700">${priceUsdt.toFixed(2)} USDT/Call</span>
-        
+          <span className="text-xs font-bold text-gray-700">
+            ${priceUsdt.toFixed(2)} USDT/Call
+          </span>
+
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setExpanded((prev) => !prev)}
-            className="h-6 w-6 p-0"
-            aria-label={expanded ? 'Collapse agent details' : 'Expand agent details'}
+            className="size-6 p-0"
+            aria-label={
+              expanded ? 'Collapse agent details' : 'Expand agent details'
+            }
           >
             {expanded ? (
-              <ChevronUp className="h-4 w-4" />
+              <ChevronUp className="size-4" />
             ) : (
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown className="size-4" />
             )}
           </Button>
         </div>
@@ -326,7 +421,9 @@ const AgentCardNode = ({ data }: { data: { agent: Agent } }) => {
         {expanded && (
           <div className="text-xs text-gray-700">
             <div className="font-medium">ETH Wallet</div>
-            <div className="font-mono break-all text-gray-800">{walletAddress}</div>
+            <div className="font-mono break-all text-gray-800">
+              {walletAddress}
+            </div>
           </div>
         )}
       </CardContent>
@@ -335,7 +432,9 @@ const AgentCardNode = ({ data }: { data: { agent: Agent } }) => {
 };
 
 // Custom Response Node Component with Handles
-const ResponseNode = ({ data }: { data: { response: Response; agentName: string } }) => {
+const ResponseNode = ({
+  data,
+}: { data: { response: Response; agentName: string } }) => {
   return (
     <Card className="w-80 bg-white shadow-lg border-2 border-orange-200 relative">
       {/* Input handle */}
@@ -343,12 +442,15 @@ const ResponseNode = ({ data }: { data: { response: Response; agentName: string 
         type="target"
         position={Position.Left}
         id={`response-${data.response.id}-input`}
-        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.ORANGE }}
+        style={{
+          ...STYLES.HANDLES.DEFAULT,
+          background: STYLES.HANDLES.COLORS.ORANGE,
+        }}
       />
-      
+
       <CardHeader className="pb-3">
         <CardTitle className="text-lg font-semibold text-orange-800 flex items-center">
-          <FileTextIcon className="w-5 h-5 mr-2" />
+          <FileTextIcon className="size-5 mr-2" />
           {data.agentName} Response
         </CardTitle>
       </CardHeader>
@@ -365,7 +467,9 @@ const ResponseNode = ({ data }: { data: { response: Response; agentName: string 
 };
 
 // Custom Summary Node Component with Handles and Button
-const SummaryNode = ({ data }: { data: { summary: Summary | null; onSummarize: () => void } }) => {
+const SummaryNode = ({
+  data,
+}: { data: { summary: Summary | null; onSummarize: () => void } }) => {
   return (
     <Card className="w-96 bg-white shadow-lg border-2 border-purple-200 relative">
       {/* Input handle */}
@@ -373,32 +477,36 @@ const SummaryNode = ({ data }: { data: { summary: Summary | null; onSummarize: (
         type="target"
         position={Position.Top}
         id="summary-input"
-        style={{ ...STYLES.HANDLES.DEFAULT, background: STYLES.HANDLES.COLORS.PURPLE }}
+        style={{
+          ...STYLES.HANDLES.DEFAULT,
+          background: STYLES.HANDLES.COLORS.PURPLE,
+        }}
       />
-      
+
       <CardHeader className="pb-3">
         <CardTitle className="text-lg font-semibold text-purple-800 flex items-center">
-          <BarChart3Icon className="w-5 h-5 mr-2" />
+          <BarChart3Icon className="size-5 mr-2" />
           Summary Report
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-sm text-gray-700 leading-relaxed">
-          {data.summary?.content || 'No summary generated yet. Click the button below to generate summary based on all responses.'}
+          {data.summary?.content ||
+            'No summary generated yet. Click the button below to generate summary based on all responses.'}
         </div>
         {data.summary && (
           <div className="text-xs text-gray-500">
             {data.summary.timestamp.toLocaleTimeString()}
           </div>
         )}
-        
+
         {/* Summarize Button */}
-        <Button 
+        <Button
           onClick={data.onSummarize}
           className="w-full bg-purple-600 hover:bg-purple-700 text-white"
           size="sm"
         >
-          <BarChart3Icon className="w-4 h-4 mr-2" />
+          <BarChart3Icon className="size-4 mr-2" />
           Generate Summary
         </Button>
       </CardContent>
@@ -415,10 +523,19 @@ const nodeTypes: NodeTypes = {
   summary: SummaryNode,
 };
 
-export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgents, onSummarize, isGenerating = false, allAgentsExecuted = false }: CanvasFlowProps) {
+export function CanvasFlow({
+  tasks,
+  agents,
+  responses,
+  summary,
+  onExecuteAllAgents,
+  onSummarize,
+  isGenerating = false,
+  allAgentsExecuted = false,
+}: CanvasFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  
+
   // Transaction confirmation dialog state
   const [isTxDialogOpen, setIsTxDialogOpen] = useState(false);
   const [showAdvancedTxDetails, setShowAdvancedTxDetails] = useState(false);
@@ -428,27 +545,32 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
   const tokenSymbol = 'USDT (ERC20)';
   const estimatedGasLimit = 65000; // simple transfer estimate
   const gasPriceGwei = 15; // example gas price
-  const estimatedGasEth = useMemo(() => (estimatedGasLimit * gasPriceGwei) / 1e9, [estimatedGasLimit, gasPriceGwei]);
+  const estimatedGasEth = useMemo(
+    () => (estimatedGasLimit * gasPriceGwei) / 1e9,
+    [estimatedGasLimit, gasPriceGwei],
+  );
   const estimatedConfirmation = '~15s';
-  const shortenAddress = (addr: string) => (addr.length > 10 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr);
- 
+  const shortenAddress = (addr: string) =>
+    addr.length > 10 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
+
   // Calculate total cost for all agents
   const calculateTotalCost = useCallback(() => {
     return agents.reduce((total, agent) => {
-      const price = typeof agent.pricingUsdt === 'number' 
-        ? agent.pricingUsdt 
-        : (() => {
-            // Generate price from agent ID (same logic as in AgentCardNode)
-            let hash = 0;
-            const seed = `${agent.id}:${agent.name}`;
-            for (let i = 0; i < seed.length; i++) {
-              hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-            }
-            const min = 0.25;
-            const max = 2.5;
-            const normalized = (hash % 1000) / 1000;
-            return Math.round((min + normalized * (max - min)) * 100) / 100;
-          })();
+      const price =
+        typeof agent.pricingUsdt === 'number'
+          ? agent.pricingUsdt
+          : (() => {
+              // Generate price from agent ID (same logic as in AgentCardNode)
+              let hash = 0;
+              const seed = `${agent.id}:${agent.name}`;
+              for (let i = 0; i < seed.length; i++) {
+                hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+              }
+              const min = 0.25;
+              const max = 2.5;
+              const normalized = (hash % 1000) / 1000;
+              return Math.round((min + normalized * (max - min)) * 100) / 100;
+            })();
       return total + price;
     }, 0);
   }, [agents]);
@@ -463,9 +585,11 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
     onExecuteAllAgents();
     setIsTxDialogOpen(false);
   }, [onExecuteAllAgents]);
-  
+
   // Store node positions to persist them during updates
-  const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(
+    new Map(),
+  );
 
   // Handle node drag to save positions
   const onNodeDragStop: NodeDragHandler = useCallback((event, node) => {
@@ -474,27 +598,33 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
 
   // Update nodes and edges when tasks, agents, responses, and summary change during streaming
   useEffect(() => {
+    // eslint-disable-line react-hooks/exhaustive-deps
     const newNodes: Node[] = [];
-    
+
     // Clear existing edges to prevent conflicts
-    console.log('Current edges before clearing:', edges.map(edge => edge.id));
-    
+    console.log(
+      'Current edges before clearing:',
+      edges.map((edge) => edge.id),
+    );
+
     // Add Task Decomposition title node
     newNodes.push({
       id: 'task-decomposition-title',
       type: 'taskDecompositionTitle',
-      position: nodePositionsRef.current.get('task-decomposition-title') || LAYOUT.INITIAL.TITLE,
+      position:
+        nodePositionsRef.current.get('task-decomposition-title') ||
+        LAYOUT.INITIAL.TITLE,
       data: { isGenerating },
     });
 
     // Add individual Task nodes in a vertical chain with proper spacing for edge visibility
     tasks.forEach((task, index) => {
       const savedPosition = nodePositionsRef.current.get(`task-${task.id}`);
-      const defaultPosition = { 
-        x: LAYOUT.INITIAL.TASK.x, 
-        y: LAYOUT.INITIAL.TASK.y + index * LAYOUT.SPACING.VERTICAL.TASKS 
+      const defaultPosition = {
+        x: LAYOUT.INITIAL.TASK.x,
+        y: LAYOUT.INITIAL.TASK.y + index * LAYOUT.SPACING.VERTICAL.TASKS,
       };
-      
+
       newNodes.push({
         id: `task-${task.id}`,
         type: 'task',
@@ -506,38 +636,40 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
     // Add Agent Card nodes positioned horizontally from tasks with proper spacing
     agents.forEach((agent, index) => {
       const savedPosition = nodePositionsRef.current.get(`agent-${agent.id}`);
-      const defaultPosition = { 
-        x: LAYOUT.INITIAL.AGENT.x, 
-        y: LAYOUT.INITIAL.AGENT.y + index * LAYOUT.SPACING.VERTICAL.AGENTS 
+      const defaultPosition = {
+        x: LAYOUT.INITIAL.AGENT.x,
+        y: LAYOUT.INITIAL.AGENT.y + index * LAYOUT.SPACING.VERTICAL.AGENTS,
       };
-      
+
       newNodes.push({
         id: `agent-${agent.id}`,
         type: 'agentCard',
         position: savedPosition || defaultPosition,
-        data: { 
-          agent
+        data: {
+          agent,
         },
       });
     });
 
     // Add Response nodes positioned horizontally from agents with proper spacing
     responses.forEach((response, index) => {
-      const agent = agents.find(a => a.id === response.agentId);
+      const agent = agents.find((a) => a.id === response.agentId);
       if (agent) {
-        const savedPosition = nodePositionsRef.current.get(`response-${response.id}`);
-        const defaultPosition = { 
-          x: LAYOUT.INITIAL.RESPONSE.x, 
-          y: LAYOUT.INITIAL.RESPONSE.y + index * LAYOUT.SPACING.VERTICAL.AGENTS 
+        const savedPosition = nodePositionsRef.current.get(
+          `response-${response.id}`,
+        );
+        const defaultPosition = {
+          x: LAYOUT.INITIAL.RESPONSE.x,
+          y: LAYOUT.INITIAL.RESPONSE.y + index * LAYOUT.SPACING.VERTICAL.AGENTS,
         };
-        
+
         newNodes.push({
           id: `response-${response.id}`,
           type: 'response',
           position: savedPosition || defaultPosition,
-          data: { 
+          data: {
             response,
-            agentName: agent.name
+            agentName: agent.name,
           },
         });
       }
@@ -546,11 +678,14 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
     // Add Summary node only if there are responses to summarize
     if (responses.length > 0) {
       const savedPosition = nodePositionsRef.current.get('summary-node');
-      const defaultPosition = { 
-        x: LAYOUT.INITIAL.TASK.x, 
-        y: LAYOUT.INITIAL.TASK.y + tasks.length * LAYOUT.SPACING.VERTICAL.TASKS + LAYOUT.SPACING.VERTICAL.SUMMARY_OFFSET 
+      const defaultPosition = {
+        x: LAYOUT.INITIAL.TASK.x,
+        y:
+          LAYOUT.INITIAL.TASK.y +
+          tasks.length * LAYOUT.SPACING.VERTICAL.TASKS +
+          LAYOUT.SPACING.VERTICAL.SUMMARY_OFFSET,
       };
-      
+
       newNodes.push({
         id: 'summary-node',
         type: 'summary',
@@ -563,7 +698,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
 
     // Create edges connecting tasks to agents
     const newEdges: Edge[] = [];
-    
+
     // Create task chain: title -> task1 -> task2 -> task3 -> task4 (vertical)
     if (tasks.length > 0) {
       // Connect title to first task
@@ -572,7 +707,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
         source: 'task-decomposition-title',
         target: `task-${tasks[0].id}`,
         type: 'default',
-        style: STYLES.EDGES.TITLE_TO_TASK
+        style: STYLES.EDGES.TITLE_TO_TASK,
       });
 
       // Connect tasks in sequence (vertical)
@@ -582,7 +717,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
           source: `task-${tasks[i].id}`,
           target: `task-${tasks[i + 1].id}`,
           type: 'default',
-          style: STYLES.EDGES.TASK_CHAIN
+          style: STYLES.EDGES.TASK_CHAIN,
         });
       }
 
@@ -594,28 +729,33 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
           source: `task-${lastTaskId}`,
           target: 'summary-node',
           type: 'default',
-          style: STYLES.EDGES.TASK_TO_SUMMARY
+          style: STYLES.EDGES.TASK_TO_SUMMARY,
         });
         console.log('Created last task to summary edge:', `ts-${lastTaskId}`);
       }
     }
-    
+
     // Create task-agent connections for associated agents
     // Filter out duplicate agents by ID to prevent edge conflicts
-    const uniqueAgents = agents.filter((agent, index, self) => 
-      index === self.findIndex(a => a.id === agent.id)
+    const uniqueAgents = agents.filter(
+      (agent, index, self) =>
+        index === self.findIndex((a) => a.id === agent.id),
     );
-    
+
     uniqueAgents.forEach((agent) => {
       if (agent.taskId) {
-        const taskNodeExists = newNodes.some(n => n.id === `task-${agent.taskId}`);
-        const agentNodeExists = newNodes.some(n => n.id === `agent-${agent.id}`);
-        
+        const taskNodeExists = newNodes.some(
+          (n) => n.id === `task-${agent.taskId}`,
+        );
+        const agentNodeExists = newNodes.some(
+          (n) => n.id === `agent-${agent.id}`,
+        );
+
         if (taskNodeExists && agentNodeExists) {
           const edgeId = `ta-${agent.taskId}-${agent.id}`;
           // Check if this edge already exists to prevent duplicates
-          const edgeExists = newEdges.some(edge => edge.id === edgeId);
-          
+          const edgeExists = newEdges.some((edge) => edge.id === edgeId);
+
           if (!edgeExists) {
             newEdges.push({
               id: edgeId,
@@ -624,9 +764,16 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
               sourceHandle: `task-${agent.taskId}-output-right`,
               targetHandle: `agent-${agent.id}-input`,
               type: 'default',
-              style: STYLES.EDGES.TASK_TO_AGENT
+              style: STYLES.EDGES.TASK_TO_AGENT,
             });
-            console.log('Created task-agent edge:', edgeId, 'for agent:', agent.id, 'task:', agent.taskId);
+            console.log(
+              'Created task-agent edge:',
+              edgeId,
+              'for agent:',
+              agent.id,
+              'task:',
+              agent.taskId,
+            );
           } else {
             console.log('Skipping duplicate task-agent edge:', edgeId);
           }
@@ -636,14 +783,18 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
 
     // Connect agents to their responses horizontally
     responses.forEach((response) => {
-      const agentNodeExists = newNodes.some(n => n.id === `agent-${response.agentId}`);
-      const responseNodeExists = newNodes.some(n => n.id === `response-${response.id}`);
-      
+      const agentNodeExists = newNodes.some(
+        (n) => n.id === `agent-${response.agentId}`,
+      );
+      const responseNodeExists = newNodes.some(
+        (n) => n.id === `response-${response.id}`,
+      );
+
       if (agentNodeExists && responseNodeExists) {
         const edgeId = `ar-${response.agentId}-${response.id}`;
         // Check if this edge already exists to prevent duplicates
-        const edgeExists = newEdges.some(edge => edge.id === edgeId);
-        
+        const edgeExists = newEdges.some((edge) => edge.id === edgeId);
+
         if (!edgeExists) {
           newEdges.push({
             id: edgeId,
@@ -652,12 +803,16 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
             sourceHandle: `agent-${response.agentId}-output`,
             targetHandle: `response-${response.id}-input`,
             type: 'default',
-            style: STYLES.EDGES.AGENT_TO_RESPONSE
+            style: STYLES.EDGES.AGENT_TO_RESPONSE,
           });
           console.log('Created horizontal agent-response edge:', edgeId);
         }
       } else {
-        console.log('Skipping response edge - nodes not ready:', { agentNodeExists, responseNodeExists, responseId: response.id });
+        console.log('Skipping response edge - nodes not ready:', {
+          agentNodeExists,
+          responseNodeExists,
+          responseId: response.id,
+        });
       }
     });
 
@@ -665,9 +820,22 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
     // The summary will be connected to the last task automatically
 
     console.log('Total edges created:', newEdges.length);
-    console.log('All edge IDs:', newEdges.map(edge => edge.id));
+    console.log(
+      'All edge IDs:',
+      newEdges.map((edge) => edge.id),
+    );
     setEdges(newEdges);
-  }, [tasks, agents, responses, summary, onSummarize, setNodes, setEdges, isGenerating]);
+  }, [
+    tasks,
+    agents,
+    responses,
+    summary,
+    onSummarize,
+    setNodes,
+    setEdges,
+    isGenerating,
+    // Note: 'edges' is intentionally excluded to prevent infinite loops
+  ]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -675,7 +843,7 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
   );
 
   return (
-    <div className="w-full h-full relative">
+    <div className="size-full relative">
       {/* Execute All Agents Button - Floating Action */}
       {agents.length > 0 && !allAgentsExecuted && (
         <div className="absolute top-4 right-4 z-10">
@@ -684,12 +852,12 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
             className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white shadow-lg"
             size="lg"
           >
-            <RocketIcon className="w-5 h-5 mr-2" />
+            <RocketIcon className="size-5 mr-2" />
             Execute All Agents ({agents.length})
           </Button>
         </div>
       )}
-      
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -710,32 +878,48 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
       <AlertDialog open={isTxDialogOpen} onOpenChange={setIsTxDialogOpen}>
         <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Batch Transaction - Execute All Agents</AlertDialogTitle>
+            <AlertDialogTitle>
+              Confirm Batch Transaction - Execute All Agents
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {
                 <div className="space-y-4 text-sm">
                   {/* Agents to Execute */}
                   <div>
-                    <div className="font-medium text-base mb-2">Agents to Execute ({agents.length})</div>
+                    <div className="font-medium text-base mb-2">
+                      Agents to Execute ({agents.length})
+                    </div>
                     <div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
                       {agents.map((agent, index) => {
-                        const price = typeof agent.pricingUsdt === 'number' 
-                          ? agent.pricingUsdt 
-                          : (() => {
-                              let hash = 0;
-                              const seed = `${agent.id}:${agent.name}`;
-                              for (let i = 0; i < seed.length; i++) {
-                                hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-                              }
-                              const min = 0.25;
-                              const max = 2.5;
-                              const normalized = (hash % 1000) / 1000;
-                              return Math.round((min + normalized * (max - min)) * 100) / 100;
-                            })();
+                        const price =
+                          typeof agent.pricingUsdt === 'number'
+                            ? agent.pricingUsdt
+                            : (() => {
+                                let hash = 0;
+                                const seed = `${agent.id}:${agent.name}`;
+                                for (let i = 0; i < seed.length; i++) {
+                                  hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+                                }
+                                const min = 0.25;
+                                const max = 2.5;
+                                const normalized = (hash % 1000) / 1000;
+                                return (
+                                  Math.round(
+                                    (min + normalized * (max - min)) * 100,
+                                  ) / 100
+                                );
+                              })();
                         return (
-                          <div key={agent.id} className="flex justify-between items-center">
-                            <span className="font-medium">{index + 1}. {agent.name}</span>
-                            <span className="text-gray-600">${price.toFixed(2)} USDT</span>
+                          <div
+                            key={agent.id}
+                            className="flex justify-between items-center"
+                          >
+                            <span className="font-medium">
+                              {index + 1}. {agent.name}
+                            </span>
+                            <span className="text-gray-600">
+                              ${price.toFixed(2)} USDT
+                            </span>
                           </div>
                         );
                       })}
@@ -755,10 +939,15 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
                       <div className="col-span-2">{tokenSymbol}</div>
 
                       <div className="text-muted-foreground">Total Amount</div>
-                      <div className="col-span-2 font-bold text-lg">${calculateTotalCost().toFixed(2)} USDT</div>
+                      <div className="col-span-2 font-bold text-lg">
+                        ${calculateTotalCost().toFixed(2)} USDT
+                      </div>
 
                       <div className="text-muted-foreground">Network fee</div>
-                      <div className="col-span-2">~{(estimatedGasEth * agents.length).toFixed(6)} ETH ({agents.length} transactions)</div>
+                      <div className="col-span-2">
+                        ~{(estimatedGasEth * agents.length).toFixed(6)} ETH (
+                        {agents.length} transactions)
+                      </div>
 
                       <div className="text-muted-foreground">Est. time</div>
                       <div className="col-span-2">{estimatedConfirmation}</div>
@@ -771,16 +960,37 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
                       className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
                       onClick={() => setShowAdvancedTxDetails((v) => !v)}
                     >
-                      {showAdvancedTxDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                      {showAdvancedTxDetails ? 'Hide advanced details' : 'Show advanced details'}
+                      {showAdvancedTxDetails ? (
+                        <ChevronUp className="size-3" />
+                      ) : (
+                        <ChevronDown className="size-3" />
+                      )}
+                      {showAdvancedTxDetails
+                        ? 'Hide advanced details'
+                        : 'Show advanced details'}
                     </button>
                     {showAdvancedTxDetails && (
                       <div className="mt-2 rounded-md border p-3 space-y-1 text-xs">
-                        <div><span className="font-medium">Batch Execution:</span> {agents.length} agents</div>
-                        <div><span className="font-medium">Method:</span> executeAllAgents()</div>
-                        <div><span className="font-medium">Total Tasks:</span> {tasks.length}</div>
-                        <div className="text-muted-foreground">All agents will be executed in parallel via the Python orchestrator.</div>
-                        <div className="text-muted-foreground">You will be asked to confirm this batch transaction in your wallet.</div>
+                        <div>
+                          <span className="font-medium">Batch Execution:</span>{' '}
+                          {agents.length} agents
+                        </div>
+                        <div>
+                          <span className="font-medium">Method:</span>{' '}
+                          executeAllAgents()
+                        </div>
+                        <div>
+                          <span className="font-medium">Total Tasks:</span>{' '}
+                          {tasks.length}
+                        </div>
+                        <div className="text-muted-foreground">
+                          All agents will be executed in parallel via the Python
+                          orchestrator.
+                        </div>
+                        <div className="text-muted-foreground">
+                          You will be asked to confirm this batch transaction in
+                          your wallet.
+                        </div>
                       </div>
                     )}
                   </div>
@@ -789,11 +999,15 @@ export function CanvasFlow({ tasks, agents, responses, summary, onExecuteAllAgen
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsTxDialogOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmAndExecuteAll}>Confirm and Execute All</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setIsTxDialogOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAndExecuteAll}>
+              Confirm and Execute All
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
   );
-} 
+}

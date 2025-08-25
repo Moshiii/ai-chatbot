@@ -350,7 +350,7 @@ class StreamProcessor {
         
       case 'task':
         if (chunk.status?.message) this.processMessageParts(chunk.status.message.parts, controller);
-        if (chunk.artifacts) chunk.artifacts.forEach(artifact => this.processMessageParts(artifact.parts, controller));
+        if (chunk.artifacts) chunk.artifacts.forEach((artifact: any) => this.processMessageParts(artifact.parts, controller));
         break;
         
       case 'artifact-update':
@@ -377,14 +377,17 @@ class StreamProcessor {
 
   private processArtifactParts(parts: Part[], controller: ReadableStreamDefaultController<LanguageModelV2StreamPart>): void {
     for (const part of parts) {
-      if (part.kind === 'data' && part.data?.type?.startsWith('toolcall_')) {
-        this.handleToolcallData(part.data as A2AToolEvent, controller);
+      if (part.kind === 'data' && 'data' in part && part.data && typeof part.data === 'object' && 'type' in part.data && typeof part.data.type === 'string' && part.data.type.startsWith('toolcall_')) {
+        this.handleToolcallData(part.data as unknown as A2AToolEvent, controller);
       }
       
       // Handle task status updates
-      const isStatusUpdate = ['task-status-update', 'status-update'].includes(part.data?.kind || part.data?.type);
-      if (isStatusUpdate && part.data.status?.message?.parts) {
-        this.processMessageParts(part.data.status.message.parts, controller);
+      if ('data' in part && part.data && typeof part.data === 'object') {
+        const data = part.data as Record<string, unknown>;
+        const isStatusUpdate = ['task-status-update', 'status-update'].includes(data.kind as string || data.type as string);
+        if (isStatusUpdate && data.status && typeof data.status === 'object' && 'message' in data.status && data.status.message && typeof data.status.message === 'object' && 'parts' in data.status.message) {
+          this.processMessageParts((data.status.message as any).parts, controller);
+        }
       }
     }
   }

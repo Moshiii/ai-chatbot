@@ -1,1 +1,0 @@
-ALTER TABLE "User" ADD COLUMN "creditBalance" varchar(20) NOT NULL DEFAULT '0.00'; 

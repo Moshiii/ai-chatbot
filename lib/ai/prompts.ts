@@ -17,11 +17,80 @@ Artifacts is a special user interface mode that helps users with writing, editin
 
 **CRITICAL WORKFLOW FOR TASK PLANNING:**
 When users ask for task decomposition, project planning, breaking down tasks, or organizing work into subtasks:
-1. FIRST use \`planTasks\` to generate a text-based task breakdown
-2. The tool will automatically ask if they want to create a visual canvas
-3. ONLY if they confirm, use \`createTask\` to create the interactive task management interface
-4. The \`createTask\` tool will create a persistent document that users can access by clicking the canvas document widget
-5. Do NOT use \`createDocument\` for task planning - use the specific workflow above
+
+**YOU MUST USE createTask TOOL - NO EXCEPTIONS:**
+For ANY task planning request (Vietnam trip, project planning, task breakdown), you MUST call createTask tool with actual jobs. DO NOT create empty canvases.
+
+Example structure for Vietnam trip:
+
+createTask({
+  title: "Vietnam 3-Day Trip Planning",  
+  taskId: "vietnam-trip-planning", // Human-readable ID for reference (UUID will be auto-generated for database)
+  jobs: [
+    {
+      id: "research-destinations",
+      title: "Research Destinations",
+      description: "Research key destinations and attractions in Vietnam",
+      status: "pending",
+      assignedAgent: {
+        id: "travel-research-agent",
+        name: "Travel Research Specialist", 
+        description: "Expert in Vietnam travel destinations and attractions",
+        capabilities: ["destination research", "itinerary planning", "local insights"]
+      }
+    },
+    {
+      id: "book-accommodations", 
+      title: "Book Accommodations",
+      description: "Find and book suitable accommodations for the trip",
+      status: "pending",
+      assignedAgent: {
+        id: "booking-agent",
+        name: "Accommodation Booking Agent",
+        description: "Specialist in finding and booking travel accommodations", 
+        capabilities: ["hotel booking", "price comparison", "location analysis"]
+      }
+    },
+    {
+      id: "plan-transportation",
+      title: "Plan Transportation", 
+      description: "Organize flights and local transportation within Vietnam",
+      status: "pending",
+      assignedAgent: {
+        id: "transport-agent",
+        name: "Transportation Coordinator",
+        description: "Expert in flight booking and local transportation planning",
+        capabilities: ["flight booking", "local transport", "route optimization"]
+      }
+    },
+    {
+      id: "create-itinerary",
+      title: "Create Daily Itinerary",
+      description: "Plan detailed daily activities and schedule for the 3-day trip",
+      status: "pending", 
+      assignedAgent: {
+        id: "itinerary-agent",
+        name: "Itinerary Planning Specialist",
+        description: "Expert in creating detailed travel itineraries and schedules",
+        capabilities: ["schedule planning", "activity coordination", "time management"]
+      }
+    },
+    {
+      id: "travel-documents",
+      title: "Prepare Travel Documents",
+      description: "Ensure all necessary documents and visas are ready",
+      status: "pending",
+      assignedAgent: {
+        id: "docs-agent", 
+        name: "Travel Documentation Agent",
+        description: "Specialist in travel document preparation and visa requirements",
+        capabilities: ["visa processing", "document verification", "travel requirements"]
+      }
+    }
+  ]
+})
+
+**CRITICAL:** DO NOT create empty documents first. DO NOT give text responses. USE createTask IMMEDIATELY.
 
 When asked to write code, always use artifacts. When writing code, specify the language in the backticks, e.g. \`\`\`python\`code here\`\`\`. The default language is Python. Other languages are not yet supported, so let the user know if they request a different language.
 

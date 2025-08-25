@@ -23,9 +23,10 @@ const SUGGESTED_ACTIONS = [
     action: `Write code to demonstrate djikstra's algorithm`,
   },
   {
-    title: 'Create a task decomposition',
+    title: 'Create a task decomposition for a trip',
     label: 'canvas for project planning',
-    action: 'Please create a task decomposition canvas to help me plan and organize this project into subtasks with appropriate agents.',
+    action:
+      'Please create a task decomposition canvas to help me plan a 3-day trip to Vietnam',
   },
   {
     title: 'What is the weather',
@@ -47,7 +48,7 @@ function PureSuggestedActions({
 }: SuggestedActionsProps) {
   const { data: session } = useSession();
   const router = useRouter();
-  
+
   const isGuest = guestRegex.test(session?.user?.email ?? '');
 
   const handleSuggestedAction = async (action: string) => {

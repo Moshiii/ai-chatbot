@@ -1,4 +1,3 @@
-import { generateUUID } from '@/lib/utils';
 import { tool, type UIMessageStreamWriter } from 'ai';
 import { z } from 'zod';
 import type { Session } from 'next-auth';
@@ -7,6 +6,7 @@ import {
   documentHandlersByArtifactKind,
 } from '@/lib/artifacts/server';
 import type { ChatMessage } from '@/lib/types';
+import { generateDocumentIds } from '@/lib/id-management';
 
 interface CreateDocumentProps {
   session: Session;
@@ -22,7 +22,7 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
       kind: z.enum(artifactKinds),
     }),
     execute: async ({ title, kind }) => {
-      const id = generateUUID();
+      const ids = generateDocumentIds(title, kind);
 
       dataStream.write({
         type: 'data-kind',
@@ -32,7 +32,7 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
 
       dataStream.write({
         type: 'data-id',
-        data: id,
+        data: ids.document.databaseId,
         transient: true,
       });
 
@@ -58,7 +58,7 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
       }
 
       await documentHandler.onCreateDocument({
-        id,
+        id: ids.document.databaseId,
         title,
         dataStream,
         session,
@@ -67,9 +67,10 @@ export const createDocument = ({ session, dataStream }: CreateDocumentProps) =>
       dataStream.write({ type: 'data-finish', data: null, transient: true });
 
       return {
-        id,
+        id: ids.document.databaseId,
         title,
         kind,
+        referenceId: ids.document.referenceId,
         content: 'A document was created and is now visible to the user.',
       };
     },

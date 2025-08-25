@@ -39,8 +39,18 @@ import { ChatSDKError } from '../errors';
 // https://authjs.dev/reference/adapter/drizzle
 
 // biome-ignore lint: Forbidden non-null assertion.
-const client = postgres(process.env.POSTGRES_URL!);
+const client = postgres(process.env.POSTGRES_URL!, {
+  max: 10, // Maximum connections in pool
+  idle_timeout: 20, // Close idle connections after 20 seconds
+  max_lifetime: 60 * 30, // Close connections after 30 minutes
+  connect_timeout: 10, // Connection timeout in seconds
+  ssl: { rejectUnauthorized: false }, // Required for Neon
+  prepare: false, // Disable prepared statements to avoid potential issues
+});
 const db = drizzle(client);
+
+// Export db instance for NextAuth.js adapter
+export { db };
 
 export async function getUser(email: string): Promise<Array<User>> {
   try {
@@ -93,7 +103,7 @@ export async function saveChat({
   visibility: VisibilityType;
 }) {
   try {
-    return await db.insert(chat).values({
+    return db.insert(chat).values({
       id,
       createdAt: new Date(),
       userId,
@@ -101,6 +111,7 @@ export async function saveChat({
       visibility,
     });
   } catch (error) {
+    console.error('Database error in saveChat:', error);
     throw new ChatSDKError('bad_request:database', 'Failed to save chat');
   }
 }
@@ -136,6 +147,9 @@ export async function getChatsByUserId({
   endingBefore: string | null;
 }) {
   try {
+    console.log(
+      `[getChatsByUserId] Fetching chats for user ID: ${id}, limit: ${limit}`,
+    );
     const extendedLimit = limit + 1;
 
     const query = (whereCondition?: SQL<any>) =>
@@ -188,11 +202,18 @@ export async function getChatsByUserId({
 
     const hasMore = filteredChats.length > limit;
 
+    console.log(
+      `[getChatsByUserId] Found ${filteredChats.length} chats for user ${id}, hasMore: ${hasMore}`,
+    );
     return {
       chats: hasMore ? filteredChats.slice(0, limit) : filteredChats,
       hasMore,
     };
   } catch (error) {
+    console.error(
+      `[getChatsByUserId] Database error for user ID ${id}:`,
+      error,
+    );
     throw new ChatSDKError(
       'bad_request:database',
       'Failed to get chats by user id',
@@ -202,9 +223,12 @@ export async function getChatsByUserId({
 
 export async function getChatById({ id }: { id: string }) {
   try {
+    console.log(`[getChatById] Fetching chat for ID: ${id}`);
     const [selectedChat] = await db.select().from(chat).where(eq(chat.id, id));
+    console.log(`[getChatById] Found chat:`, selectedChat ? 'Yes' : 'No');
     return selectedChat;
   } catch (error) {
+    console.error(`[getChatById] Database error for ID ${id}:`, error);
     throw new ChatSDKError('bad_request:database', 'Failed to get chat by id');
   }
 }
@@ -240,10 +264,12 @@ export async function voteMessage({
   chatId,
   messageId,
   type,
+  userId,
 }: {
   chatId: string;
   messageId: string;
   type: 'up' | 'down';
+  userId: string;
 }) {
   try {
     const [existingVote] = await db
@@ -254,13 +280,14 @@ export async function voteMessage({
     if (existingVote) {
       return await db
         .update(vote)
-        .set({ isUpvoted: type === 'up' })
+        .set({ value: type })
         .where(and(eq(vote.messageId, messageId), eq(vote.chatId, chatId)));
     }
     return await db.insert(vote).values({
       chatId,
       messageId,
-      isUpvoted: type === 'up',
+      value: type,
+      userId,
     });
   } catch (error) {
     throw new ChatSDKError('bad_request:database', 'Failed to vote message');
@@ -332,14 +359,19 @@ export async function saveDocument({
 
 export async function getDocumentsById({ id }: { id: string }) {
   try {
+    console.log(`[getDocumentsById] Fetching documents for ID: ${id}`);
     const documents = await db
       .select()
       .from(document)
       .where(eq(document.id, id))
       .orderBy(asc(document.createdAt));
 
+    console.log(
+      `[getDocumentsById] Found ${documents.length} documents for ID: ${id}`,
+    );
     return documents;
   } catch (error) {
+    console.error(`[getDocumentsById] Database error for ID ${id}:`, error);
     throw new ChatSDKError(
       'bad_request:database',
       'Failed to get documents by id',

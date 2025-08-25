@@ -17,13 +17,13 @@ import {
   saveChat,
   saveMessages,
 } from '@/lib/db/queries';
-import { convertToUIMessages, generateUUID } from '@/lib/utils';
+import { convertToUIMessages } from '@/lib/utils';
+import { generateChatIds } from '@/lib/id-management';
 import { generateTitleFromUserMessage } from '../../actions';
 import { createDocument } from '@/lib/ai/tools/create-document';
 import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
-import { planTasks } from '@/lib/ai/tools/plan-tasks';
 import { createTask } from '@/lib/ai/tools/create-task';
 import { updateTask } from '@/lib/ai/tools/update-task';
 import { isProductionEnvironment } from '@/lib/constants';
@@ -52,7 +52,10 @@ export function getStreamContext() {
         waitUntil: after,
       });
     } catch (error: any) {
-      if (error.message.includes('REDIS_URL') || error.message.includes('Invalid URL')) {
+      if (
+        error.message.includes('REDIS_URL') ||
+        error.message.includes('Invalid URL')
+      ) {
         console.log(
           ' > Resumable streams are disabled due to missing or invalid REDIS_URL',
         );
@@ -69,11 +72,10 @@ export async function POST(request: Request) {
   let requestBody: PostRequestBody;
 
   try {
-    const json = await request.json();
-    requestBody = postRequestBodySchema.parse(json);
+    const responseBody = await request.json();
+    requestBody = postRequestBodySchema.parse(responseBody);
   } catch (error) {
     console.error('Request validation error:', error);
-    console.error('Request body:', JSON.stringify(json, null, 2));
     return new ChatSDKError('bad_request:api').toResponse();
   }
 
@@ -151,7 +153,8 @@ export async function POST(request: Request) {
       ],
     });
 
-    const streamId = generateUUID();
+    const chatIds = generateChatIds();
+    const streamId = chatIds.generateStreamId().databaseId;
     await createStreamId({ streamId, chatId: id });
 
     const stream = createUIMessageStream({
@@ -166,17 +169,15 @@ export async function POST(request: Request) {
               ? []
               : [
                   'getWeather',
-                  'planTasks',
-                  'createTask',
+                  'createTask', // Primary tool for task planning
                   'updateTask',
-                  'createDocument',
+                  'createDocument', // Keep for non-task workflows
                   'updateDocument',
                   'requestSuggestions',
                 ],
           experimental_transform: smoothStream({ chunking: 'word' }),
           tools: {
             getWeather,
-            planTasks: planTasks({ session, dataStream }),
             createTask: createTask({ session, dataStream }),
             updateTask: updateTask({ session, dataStream }),
             createDocument: createDocument({ session, dataStream }),
@@ -197,10 +198,11 @@ export async function POST(request: Request) {
         dataStream.merge(
           result.toUIMessageStream({
             sendReasoning: true,
+            originalMessages: uiMessages, // Fix for AI SDK v5 to prevent repeated assistant messages with tools
           }),
         );
       },
-      generateId: generateUUID,
+      generateId: () => chatIds.generateMessageId().databaseId,
       onFinish: async ({ messages }) => {
         await saveMessages({
           messages: messages.map((message) => ({
@@ -233,7 +235,7 @@ export async function POST(request: Request) {
     if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
-    
+
     console.error('Unexpected error in chat route:', error);
     return new ChatSDKError('bad_request:chat').toResponse();
   }

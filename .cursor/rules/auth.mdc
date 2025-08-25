@@ -1,3 +1,10 @@
+
+---
+description: instructions for implementing GitHub OAuth authentication using AuthJS (NextAuth.js) in Next.js applications
+alwaysApply: false
+---
+
+
 # GitHub OAuth with AuthJS and Session Management
 
 This guide provides comprehensive instructions for implementing GitHub OAuth authentication using AuthJS (NextAuth.js) in Next.js applications, including database adapters, session management, and route protection.
@@ -9,13 +16,17 @@ This guide provides comprehensive instructions for implementing GitHub OAuth aut
 Enable GitHub as a sign-in option in your Auth.js configuration. In Next.js, set up your configuration in a file at the root of your repository.
 
 **File: `auth.ts`**
+
+
 ```typescript
-import NextAuth from "next-auth"
-import GitHub from "next-auth/providers/github"
+import NextAuth from "next-auth";
+import GitHub from "next-auth/providers/github";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [GitHub],
-})
+});
+=======
+
 ```
 
 ### 2. API Route Setup
@@ -23,9 +34,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 Add the `handlers` which NextAuth returns to your `api/auth/[...nextauth]/route.ts` file so that Auth.js can run on any incoming request.
 
 **File: `app/api/auth/[...nextauth]/route.ts`**
+
+
 ```typescript
-import { handlers } from "@/auth"
-export const { GET, POST } = handlers
+import { handlers } from "@/auth";
+export const { GET, POST } = handlers;
+
 ```
 
 ## Sign-in Implementation
@@ -35,20 +49,25 @@ export const { GET, POST } = handlers
 Add a sign-in button in your application (e.g., Navbar) that triggers Auth.js sign-in when clicked.
 
 **File: `components/sign-in.tsx`**
+
+
 ```typescript
-import { signIn } from "@/auth"
+import { signIn } from "@/auth";
+
 
 export default function SignIn() {
   return (
     <form
       action={async () => {
-        "use server"
-        await signIn("github")
+        "use server";
+        await signIn("github");
+
       }}
     >
       <button type="submit">Sign in with GitHub</button>
     </form>
-  )
+  );
+
 }
 ```
 
@@ -59,6 +78,10 @@ export default function SignIn() {
 Database Adapters are the bridge used to connect Auth.js to your database.
 
 **Installation:**
+
+
+=======
+
 ```bash
 npm install @auth/pg-adapter pg
 ```
@@ -66,6 +89,7 @@ npm install @auth/pg-adapter pg
 ### Environment Variables
 
 Set up the following environment variables:
+
 ```env
 DATABASE_HOST=
 DATABASE_NAME=
@@ -76,10 +100,12 @@ DATABASE_PASSWORD=
 ### Configuration
 
 **File: `auth.ts`**
+
 ```typescript
-import NextAuth from "next-auth"
-import PostgresAdapter from "@auth/pg-adapter"
-import { Pool } from "pg"
+import NextAuth from "next-auth";
+import PostgresAdapter from "@auth/pg-adapter";
+import { Pool } from "pg";
+
 
 const pool = new Pool({
   host: process.env.DATABASE_HOST,
@@ -89,12 +115,15 @@ const pool = new Pool({
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
-})
+
+});
+
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PostgresAdapter(pool),
   providers: [],
-})
+
+});
 ```
 
 ### Neon Database (Edge Runtime)
@@ -102,22 +131,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 If using Neon's PostgreSQL like Vercel Postgres, use `@neondatabase/serverless` for edge runtime compatibility.
 
 **File: `auth.ts`**
+
+
 ```typescript
-import NextAuth from "next-auth"
-import PostgresAdapter from "@auth/pg-adapter"
-import { Pool } from "@neondatabase/serverless"
+import NextAuth from "next-auth";
+import PostgresAdapter from "@auth/pg-adapter";
+import { Pool } from "@neondatabase/serverless";
+
 
 // *DO NOT* create a `Pool` here, outside the request handler.
 // Neon's Postgres cannot keep a pool alive between requests.
 
 export const { handlers, auth, signIn, signOut } = NextAuth(() => {
   // Create a `Pool` inside the request handler.
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   return {
     adapter: PostgresAdapter(pool),
     providers: [],
-  }
-})
+  };
+});
+
 ```
 
 ## Database Schema
@@ -177,39 +210,48 @@ CREATE TABLE users
 You can pass a provider to the `signIn` function for direct login, or redirect to a custom sign-in page.
 
 ```typescript
-import { signIn } from "@/auth"
+
+import { signIn } from "@/auth";
+
 
 export function SignIn() {
   return (
     <form
       action={async () => {
-        "use server"
-        await signIn("github", { redirectTo: "/dashboard" })
+
+        "use server";
+        await signIn("github", { redirectTo: "/dashboard" });
+
       }}
     >
       <button type="submit">Sign in</button>
     </form>
-  )
+  );
+
 }
 ```
 
 ### Sign-out Implementation
 
 **File: `app/components/signout-button.tsx`**
+
+
 ```typescript
-import { signOut } from "@/auth"
+import { signOut } from "@/auth";
+
 
 export function SignOut() {
   return (
     <form
       action={async () => {
-        "use server"
-        await signOut()
+
+        "use server";
+        await signOut();
       }}
     >
       <button type="submit">Sign Out</button>
     </form>
-  )
+  );
 }
 ```
 
@@ -220,19 +262,22 @@ export function SignOut() {
 Once a user is logged in, get the session object to access user data.
 
 **File: `components/UserAvatar.tsx`**
+
+
 ```typescript
-import { auth } from "../auth"
+import { auth } from "../auth";
 
 export default async function UserAvatar() {
-  const session = await auth()
+  const session = await auth();
 
-  if (!session?.user) return null
+  if (!session?.user) return null;
 
   return (
     <div>
       <img src={session.user.image} alt="User Avatar" />
     </div>
-  )
+  );
+
 }
 ```
 
@@ -243,18 +288,21 @@ export default async function UserAvatar() {
 Protect routes by checking for active sessions and redirecting unauthenticated users.
 
 **File: `app/server/page.tsx`**
+
+
 ```typescript
-import { auth } from "@/auth"
+import { auth } from "@/auth";
 
 export default async function Page() {
-  const session = await auth()
-  if (!session) return <div>Not authenticated</div>
+  const session = await auth();
+  if (!session) return <div>Not authenticated</div>;
+
 
   return (
     <div>
       <pre>{JSON.stringify(session, null, 2)}</pre>
     </div>
-  )
+  );
 }
 ```
 
@@ -263,18 +311,22 @@ export default async function Page() {
 Enable custom authentication pages by adding the `pages` configuration to your Auth.js setup.
 
 **File: `auth.ts`**
+
 ```typescript
-import { NextAuth } from "next-auth"
-import GitHub from "next-auth/providers/github"
+import { NextAuth } from "next-auth";
+import GitHub from "next-auth/providers/github";
+
 
 export const config = {
   providers: [GitHub],
   pages: {
     signIn: "/login",
   },
-}
 
-export const { signIn, signOut, handle } = NextAuth(config)
+};
+
+export const { signIn, signOut, handle } = NextAuth(config);
+
 ```
 
 ## Middleware Integration
@@ -282,28 +334,30 @@ export const { signIn, signOut, handle } = NextAuth(config)
 For additional route protection, you can integrate with Next.js middleware to check authentication status before requests reach your pages.
 
 **File: `middleware.ts`**
+
 ```typescript
-import { NextResponse, type NextRequest } from 'next/server'
-import { getToken } from 'next-auth/jwt'
+import { NextResponse, type NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
-  
+  const { pathname } = request.nextUrl;
+
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,
-  })
+  });
 
-  if (!token && pathname !== '/login') {
-    return NextResponse.redirect(new URL('/login', request.url))
+  if (!token && pathname !== "/login") {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  return NextResponse.next()
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-}
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+};
+
 ```
 
 ## Best Practices
@@ -314,6 +368,6 @@ export const config = {
 4. **Route Protection**: Implement middleware for consistent authentication checks
 5. **Error Handling**: Provide clear error messages for authentication failures
 6. **Security**: Use secure cookies in production environments
-}
- 
+   }
+
 export const { signIn, signOut, handle } = NextAuth(config)
