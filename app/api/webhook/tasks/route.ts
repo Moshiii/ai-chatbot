@@ -1,87 +1,122 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db/queries';
-import { task, document } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { db, updateTask, updateDocumentTaskIds } from '@/lib/db/queries';
+import { task, document } from '@/lib/db/schema';
 
 export async function POST(request: NextRequest) {
   try {
-    // Extract token from Authorization header
+    // Extract and validate Authorization header
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Missing or invalid authorization header' },
+        { error: 'Missing authorization header' },
         { status: 401 },
       );
     }
 
     const providedToken = authHeader.substring(7);
-    if (!providedToken) {
-      return NextResponse.json({ error: 'Missing token' }, { status: 401 });
-    }
 
+    // Parse request body
     const body = await request.json();
 
     // Validate required fields
-    const { id: taskId, documentId, status, artifacts } = body;
-    if (!taskId || !documentId || !status) {
+    const { id: taskId, documentId, contextId, status, artifacts } = body;
+    if (!taskId || !documentId || !contextId || !status) {
       return NextResponse.json(
-        { error: 'Missing required fields: id, documentId, status' },
+        { error: 'Missing required fields: id, documentId, contextId, status' },
         { status: 400 },
       );
     }
 
-    // Validate token against stored webhookToken for this task
+    // Validate status is a valid task status
+    const validStatuses = [
+      'submitted',
+      'working',
+      'input-required',
+      'completed',
+      'canceled',
+      'failed',
+      'rejected',
+      'auth-required',
+      'unknown',
+    ];
+
+    if (!validStatuses.includes(status.state)) {
+      return NextResponse.json(
+        { error: 'Invalid task status' },
+        { status: 400 },
+      );
+    }
+
+    // Verify webhook token matches stored token
     const existingTasks = await db
       .select()
       .from(task)
       .where(eq(task.id, taskId))
       .limit(1);
 
-    if (!existingTasks.length) {
+    if (existingTasks.length === 0) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    const foundTask = existingTasks[0];
-    if (foundTask.webhookToken !== providedToken) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    const existingTask = existingTasks[0];
+    if (existingTask.webhookToken !== providedToken) {
+      return NextResponse.json(
+        { error: 'Invalid webhook token' },
+        { status: 401 },
+      );
     }
 
-    // Update task status and result
-    await db
-      .update(task)
-      .set({
-        status: status.state,
-        statusMessage: status.message || null,
-        result: artifacts || null,
-        updatedAt: new Date(),
-      })
-      .where(eq(task.id, taskId));
+    // Extract status message and result from artifacts if available
+    let statusMessage = status.message || null;
+    let result = null;
 
-    // Update document to link the task
-    const existingDocuments = await db
-      .select({ taskIds: document.taskIds })
+    if (artifacts && artifacts.length > 0) {
+      // Look for data parts in artifacts
+      for (const artifact of artifacts) {
+        if (artifact.parts) {
+          for (const part of artifact.parts) {
+            if (part.kind === 'data' && part.data) {
+              result = part.data;
+              break;
+            }
+            if (part.kind === 'text' && part.text) {
+              statusMessage = part.text;
+            }
+          }
+        }
+      }
+    }
+
+    // Update the task
+    await updateTask({
+      id: taskId,
+      status: status.state,
+      statusMessage,
+      result,
+    });
+
+    // Update the document's taskIds array if needed
+    const documentData = await db
+      .select()
       .from(document)
       .where(eq(document.id, documentId))
       .limit(1);
 
-    if (existingDocuments.length > 0) {
-      const currentTaskIds = existingDocuments[0].taskIds || [];
-      const updatedTaskIds = Array.from(new Set([...currentTaskIds, taskId]));
-
-      await db
-        .update(document)
-        .set({
+    if (documentData.length > 0) {
+      const currentTaskIds = documentData[0].taskIds || [];
+      if (!currentTaskIds.includes(taskId)) {
+        const updatedTaskIds = [...currentTaskIds, taskId];
+        await updateDocumentTaskIds({
+          documentId,
           taskIds: updatedTaskIds,
-          content: `Task ${taskId} updated: ${status.state}`,
-        })
-        .where(eq(document.id, documentId));
+        });
+      }
     }
 
-    // Log successful webhook processing
-    console.log(`[Webhook] Task ${taskId} updated to ${status.state}`);
+    console.log(`[Webhook] Task ${taskId} updated to status: ${status.state}`);
 
-    // Return 204 No Content as per A2A spec
-    return new NextResponse(null, { status: 204 });
+    return new Response(null, { status: 204 });
   } catch (error) {
     console.error('[Webhook] Error processing task update:', error);
     return NextResponse.json(

@@ -824,6 +824,7 @@ export function CanvasFlow({
       newEdges.map((edge) => edge.id),
     );
     setEdges(newEdges);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- edges intentionally excluded to prevent infinite loops
   }, [
     tasks,
     agents,
