@@ -1,25 +1,27 @@
-"""Task Agent Executor - Handles task decomposition into jobs and job execution"""
+"""Task Agent Executor - A2A-compliant agent for task decomposition and execution"""
 
 import asyncio
 import json
+import uuid
+import requests
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from a2a.server.agent_execution import RequestContext, AgentExecutor
 from a2a.server.events import EventQueue
 from a2a.types import Artifact, Part, TaskArtifactUpdateEvent, TaskStatusUpdateEvent
 from a2a.utils import new_agent_text_message
-import uuid
 
 
 class TaskAgentExecutor(AgentExecutor):
-    """Agent executor for task decomposition and job execution"""
-    
+    """A2A-compliant agent executor for task decomposition and job execution"""
+
     def __init__(self):
         super().__init__()
         self.job_counter = 0
         self.agent_counter = 0
         self.tasks_store = {}  # Store task data by taskId
+        self.webhook_base_url = "http://localhost:3000"  # Default Next.js URL
     
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         """Execute using clean A2A streaming pattern"""
@@ -72,7 +74,59 @@ class TaskAgentExecutor(AgentExecutor):
     async def cancel(self) -> None:
         """Cancel the current execution"""
         raise NotImplementedError("Cancellation not supported")
-    
+
+    def _call_webhook(self, url: str, token: str, task_data: Dict[str, Any],
+                     document_id: Optional[str] = None) -> bool:
+        """Send webhook notification to Next.js application"""
+        try:
+            payload = {
+                "id": task_data["id"],
+                "contextId": task_data.get("contextId", "default"),
+                "kind": "task",
+                "status": task_data["status"],
+                "artifacts": task_data.get("artifacts", [])
+            }
+
+            if document_id:
+                payload["documentId"] = document_id
+
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+
+            if response.status_code == 204:
+                print(f"[Webhook] Successfully notified for task {task_data['id']}")
+                return True
+            else:
+                print(f"[Webhook] Failed for task {task_data['id']}: {response.status_code} - {response.text}")
+                return False
+
+        except Exception as e:
+            print(f"[Webhook] Error sending notification for task {task_data['id']}: {e}")
+            return False
+
+    def _extract_document_id(self, context: RequestContext) -> Optional[str]:
+        """Extract document ID from context (passed from Next.js)"""
+        if hasattr(context, 'message') and context.message:
+            if hasattr(context.message, 'parts') and context.message.parts:
+                for part in context.message.parts:
+                    if hasattr(part, 'root') and part.root:
+                        if hasattr(part.root, 'text') and part.root.text:
+                            # Look for documentId in the message content
+                            text = part.root.text
+                            if "documentId:" in text:
+                                # Extract document ID from message
+                                start = text.find("documentId:") + len("documentId:")
+                                end = text.find(",", start) if "," in text[start:] else len(text)
+                                doc_id = text[start:end].strip()
+                                if doc_id:
+                                    print(f"[TaskAgent] Extracted documentId: {doc_id}")
+                                    return doc_id
+        return None
+
     def _extract_user_message(self, context: RequestContext) -> str:
         """Extract the user message from the request context"""
         if hasattr(context, 'message') and context.message:
@@ -109,139 +163,215 @@ class TaskAgentExecutor(AgentExecutor):
         await event_queue.enqueue_event(new_agent_text_message(response_text))
     
     async def _create_task_with_jobs(self, event_queue: EventQueue, context: RequestContext, user_message: str) -> None:
-        """Create a task and decompose it into jobs"""
-        
+        """Create a task and decompose it into jobs using A2A webhook pattern"""
+
         print(f"[TaskAgent] Creating task decomposition")
-        
+
         # Generate jobs based on the request
         jobs = await self._generate_jobs(user_message)
         project_title = self._extract_project_title(user_message)
-        
+
         # Generate unique task ID (proper UUID)
         task_id = str(uuid.uuid4())
+        webhook_token = str(uuid.uuid4())  # Generate webhook token
         print(f"[TaskAgent] Generated taskId: {task_id}")
-        
+
         # Store task data for later execution
         self.tasks_store[task_id] = {
             "title": project_title,
             "jobs": jobs,
-            "agents": [job["assignedAgent"] for job in jobs if job.get("assignedAgent")]
+            "agents": [job["assignedAgent"] for job in jobs if job.get("assignedAgent")],
+            "webhook_token": webhook_token,
+            "context_id": context.context_id
         }
         print(f"[TaskAgent] Stored task {task_id} with {len(jobs)} jobs")
-        
-        # Create toolcall for createTask
-        toolcall_id = str(uuid.uuid4())
-        
-        toolcall_data = {
-            "type": "toolcall_initiated",
-            "toolcall": {
-                "id": toolcall_id,
-                "function": "createTask",
-                "arguments": {
-                    "title": project_title,
-                    "taskId": task_id,
-                    "jobs": jobs
+
+        # Extract document ID from context (passed from Next.js)
+        document_id = self._extract_document_id(context)
+
+        # Send initial task creation webhook
+        task_data = {
+            "id": task_id,
+            "contextId": context.context_id,
+            "kind": "task",
+            "status": {
+                "state": "working",
+                "timestamp": datetime.now().isoformat() + 'Z'
+            },
+            "artifacts": [{
+                "artifactId": str(uuid.uuid4()),
+                "parts": [{
+                    "kind": "data",
+                    "data": {
+                        "type": "task-created",
+                        "title": project_title,
+                        "jobs": jobs
+                    }
+                }]
+            }]
+        }
+
+        webhook_url = f"{self.webhook_base_url}/api/webhook/tasks"
+        self._call_webhook(webhook_url, webhook_token, task_data, document_id)
+
+        # Send individual job updates with delay for better UX
+        for i, job in enumerate(jobs):
+            await asyncio.sleep(0.2)  # 200ms delay between jobs
+
+            job_task_data = {
+                "id": task_id,
+                "contextId": context.context_id,
+                "kind": "task",
+                "status": {
+                    "state": "working",
+                    "timestamp": datetime.now().isoformat() + 'Z'
                 },
-                "status": "initiated"
-            },
-            "context_id": context.context_id,
-            "task_id": task_id,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        # Send toolcall as artifact
-        await event_queue.enqueue_event(TaskArtifactUpdateEvent(
-            taskId=context.task_id,
-            contextId=context.context_id,
-            artifact=Artifact(
-                artifactId=f"toolcall-{toolcall_id}",
-                parts=[Part(kind="data", data=toolcall_data)]
-            ),
-            lastChunk=False
-        ))
-        
-        await asyncio.sleep(0.5)
-        
-        # Send completion
-        completion_data = {
-            "type": "toolcall_completed",
-            "toolcall": {
-                "id": toolcall_id,
-                "function": "createTask",
-                "status": "completed",
-                "result": f"Task {task_id} created with {len(jobs)} jobs"
-            },
-            "context_id": context.context_id,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        await event_queue.enqueue_event(TaskArtifactUpdateEvent(
-            taskId=context.task_id,
-            contextId=context.context_id,
-            artifact=Artifact(
-                artifactId=f"toolcall-result-{toolcall_id}",
-                parts=[Part(kind="data", data=completion_data)]
-            ),
-            lastChunk=True
-        ))
-        
-        print(f"[TaskAgent] CreateTask completed")
+                "artifacts": [{
+                    "artifactId": str(uuid.uuid4()),
+                    "parts": [{
+                        "kind": "data",
+                        "data": {
+                            "type": "job-added",
+                            "job": job,
+                            "jobIndex": i + 1,
+                            "totalJobs": len(jobs)
+                        }
+                    }]
+                }]
+            }
+
+            self._call_webhook(webhook_url, webhook_token, job_task_data, document_id)
+
+        print(f"[TaskAgent] Task creation completed with webhook notifications")
     
     async def _execute_jobs(self, event_queue: EventQueue, context: RequestContext, user_message: str) -> None:
-        """Execute jobs for a given task"""
-        
+        """Execute jobs for a given task using A2A webhook pattern"""
+
         print(f"[TaskAgent] Starting job execution")
-        
+
         try:
             # Parse the execution request
             data = json.loads(user_message)
             task_id = data.get("taskId")
             execution_mode = data.get("executionMode", "parallel")
-            
+
             print(f"[TaskAgent] Executing task {task_id} in {execution_mode} mode")
-            
+
             # Get task data
             task_data = self.tasks_store.get(task_id)
             if not task_data:
                 print(f"[TaskAgent] Task {task_id} not found, using demo data")
                 task_data = self._create_demo_task_data()
                 self.tasks_store[task_id] = task_data
-            
+
             jobs = task_data.get("jobs", [])
+            webhook_token = task_data.get("webhook_token", str(uuid.uuid4()))
+            document_id = self._extract_document_id(context)
+            webhook_url = f"{self.webhook_base_url}/api/webhook/tasks"
+
             print(f"[TaskAgent] Executing {len(jobs)} jobs")
-            
-            # Execute each job
+
+            # Execute each job with webhook notifications
             for i, job in enumerate(jobs):
                 job_id = job.get("id")
                 agent = job.get("assignedAgent")
-                
+
                 if agent:
                     print(f"[TaskAgent] [{i+1}/{len(jobs)}] Executing job {job_id}")
-                    
-                    # Send in-progress update
-                    await self._send_job_update(
-                        event_queue, context, job_id, agent,
-                        "in-progress", f"Agent {agent['name']} is working on: {job['title']}"
-                    )
-                    
+
+                    # Send in-progress webhook update
+                    progress_task_data = {
+                        "id": task_id,
+                        "contextId": context.context_id,
+                        "kind": "task",
+                        "status": {
+                            "state": "working",
+                            "timestamp": datetime.now().isoformat() + 'Z'
+                        },
+                        "artifacts": [{
+                            "artifactId": str(uuid.uuid4()),
+                            "parts": [{
+                                "kind": "data",
+                                "data": {
+                                    "type": "job-progress",
+                                    "jobId": job_id,
+                                    "agentId": agent["id"],
+                                    "agentName": agent["name"],
+                                    "status": "in-progress",
+                                    "content": f"Agent {agent['name']} is working on: {job['title']}",
+                                    "progress": (i + 1) / len(jobs) * 100
+                                }
+                            }]
+                        }]
+                    }
+
+                    self._call_webhook(webhook_url, webhook_token, progress_task_data, document_id)
+
                     # Simulate work
                     await asyncio.sleep(2)
-                    
-                    # Send completion update
+
+                    # Send completion webhook update
                     result = self._generate_job_result(job, agent)
-                    await self._send_job_update(
-                        event_queue, context, job_id, agent,
-                        "completed", result
-                    )
-                    
+                    completion_task_data = {
+                        "id": task_id,
+                        "contextId": context.context_id,
+                        "kind": "task",
+                        "status": {
+                            "state": "working",
+                            "timestamp": datetime.now().isoformat() + 'Z'
+                        },
+                        "artifacts": [{
+                            "artifactId": str(uuid.uuid4()),
+                            "parts": [{
+                                "kind": "data",
+                                "data": {
+                                    "type": "job-completed",
+                                    "jobId": job_id,
+                                    "agentId": agent["id"],
+                                    "agentName": agent["name"],
+                                    "status": "completed",
+                                    "content": result,
+                                    "jobIndex": i + 1,
+                                    "totalJobs": len(jobs)
+                                }
+                            }]
+                        }]
+                    }
+
+                    self._call_webhook(webhook_url, webhook_token, completion_task_data, document_id)
+
                     if i < len(jobs) - 1:
                         await asyncio.sleep(0.5)
-            
-            # Send summary
-            await self._send_execution_summary(event_queue, context, task_id, jobs, execution_mode)
-            
-            print(f"[TaskAgent] Job execution completed")
-            
+
+            # Send final completion webhook
+            final_task_data = {
+                "id": task_id,
+                "contextId": context.context_id,
+                "kind": "task",
+                "status": {
+                    "state": "completed",
+                    "timestamp": datetime.now().isoformat() + 'Z'
+                },
+                "artifacts": [{
+                    "artifactId": str(uuid.uuid4()),
+                    "parts": [{
+                        "kind": "data",
+                        "data": {
+                            "type": "execution-summary",
+                            "taskId": task_id,
+                            "totalJobs": len(jobs),
+                            "status": "completed",
+                            "executionMode": execution_mode,
+                            "completedAt": datetime.now().isoformat() + 'Z'
+                        }
+                    }]
+                }]
+            }
+
+            self._call_webhook(webhook_url, webhook_token, final_task_data, document_id)
+
+            print(f"[TaskAgent] Job execution completed with webhook notifications")
+
         except Exception as e:
             print(f"[TaskAgent] Error executing jobs: {e}")
             await event_queue.enqueue_event(new_agent_text_message(f"Error executing jobs: {str(e)}"))
