@@ -1,6 +1,7 @@
 import { Artifact } from '@/components/create-artifact';
 import { CanvasFlow } from '../../components/canvas-flow';
 import { DocumentSkeleton } from '@/components/document-skeleton';
+import React from 'react';
 
 import {
   ClockRewind,
@@ -10,8 +11,225 @@ import {
   RedoIcon,
   UndoIcon,
 } from '@/components/icons';
-import type { Suggestion } from '@/lib/db/schema';
+import type { Suggestion, Document, Task } from '@/lib/db/schema';
 import { toast } from 'sonner';
+import useSWR from 'swr';
+import { fetcher } from '@/lib/utils';
+import { transformTaskStatusToUI } from '@/lib/types';
+
+// Canvas Content Component that handles all the data fetching and rendering
+interface CanvasContentProps {
+  mode: string;
+  status: string;
+  content: string;
+  isCurrentVersion: boolean;
+  currentVersionIndex: number;
+  onSaveContent: (updatedContent: string, debounce: boolean) => void;
+  getDocumentContentById: (id: number) => string;
+  isLoading: boolean;
+  metadata: CanvasArtifactMetadata;
+}
+
+const CanvasContent: React.FC<CanvasContentProps> = ({
+  mode,
+  status,
+  content,
+  isCurrentVersion,
+  currentVersionIndex,
+  onSaveContent,
+  getDocumentContentById,
+  isLoading,
+  metadata,
+}) => {
+  // For now, we'll use a simple approach - get document ID from content or metadata
+  // This is a temporary solution until we have proper artifact context
+  const documentId = content || metadata?.taskId;
+
+  // Always call useSWR hooks unconditionally (Rules of Hooks) - BEFORE any conditional returns
+  const {
+    data: canvasDocument,
+    isLoading: isDocumentLoading,
+    mutate: mutateDocument,
+  } = useSWR<Document>(
+    'canvas-document', // Stable key
+    async () => {
+      // Handle conditional logic inside the fetcher
+      if (!documentId || documentId === 'init') {
+        return null;
+      }
+      return fetcher(`/api/document?id=${documentId}`);
+    },
+  );
+
+  // Always call useSWR for tasks - use stable key
+  const {
+    data: tasksData,
+    isLoading: isTasksLoading,
+    mutate: mutateTasks,
+  } = useSWR<Task[]>(
+    'tasks-data', // Stable key
+    async () => {
+      const taskIds = canvasDocument?.taskIds || [];
+      if (taskIds.length === 0) {
+        return [];
+      }
+
+      // Fetch tasks individually and combine results
+      const responses = await Promise.all(
+        taskIds.map((taskId: string) => fetcher(`/api/tasks/${taskId}`)),
+      );
+      return responses;
+    },
+  );
+
+  // Now we can have conditional returns after all hooks are called
+  if (isLoading || isDocumentLoading) {
+    return <DocumentSkeleton artifactKind="canvas" />;
+  }
+
+  // Recreate taskIds for later use
+  const taskIds = canvasDocument?.taskIds || [];
+
+  // Convert database tasks to UI format expected by CanvasFlow using Zod helper
+  const uiTasks = (tasksData || []).map((task) => ({
+    id: task.id,
+    title: `Task ${task.id.slice(-8)}`, // Use part of ID as title for now
+    description: `Status: ${task.status}`,
+    status: transformTaskStatusToUI(task.status), // Use Zod helper for type-safe transformation
+  }));
+
+  // Mock agents data for now (in A2A, agents are managed by external orchestrator)
+  const mockAgents = uiTasks.map((task) => ({
+    id: `agent-${task.id}`,
+    name: `Agent for ${task.title}`,
+    description: 'A2A Agent',
+    capabilities: ['task-execution'],
+    taskId: task.id,
+  }));
+
+  // Mock responses data for completed tasks
+  const mockResponses = uiTasks
+    .filter((task) => task.status === 'completed')
+    .map((task) => ({
+      id: `response-${task.id}`,
+      agentId: `agent-${task.id}`,
+      content: 'Task completed successfully',
+      timestamp: new Date(),
+    }));
+
+  if (isTasksLoading) {
+    return <DocumentSkeleton artifactKind="canvas" />;
+  }
+
+  if (mode === 'diff') {
+    const oldContent = getDocumentContentById(currentVersionIndex - 1);
+    const newContent = getDocumentContentById(currentVersionIndex);
+
+    return (
+      <div className="flex flex-col py-8 md:p-20 px-4">
+        <div className="text-sm text-muted-foreground mb-4">
+          Canvas diff view not available
+        </div>
+        <div className="bg-muted p-4 rounded-lg">
+          <div className="font-semibold mb-2">Previous:</div>
+          <div className="text-sm">{oldContent}</div>
+          <div className="font-semibold mb-2 mt-4">Current:</div>
+          <div className="text-sm">{newContent}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Handler for executing all agents via Python orchestrator
+  const handleExecuteAllAgents = async () => {
+    if (!tasksData || tasksData.length === 0) {
+      toast.warning('No tasks available to execute');
+      return;
+    }
+
+    toast.info(`Executing ${tasksData.length} tasks...`);
+
+    // Execute tasks in parallel via the agent execution API
+    try {
+      const executionPromises = tasksData.map(async (task) => {
+        const response = await fetch('/api/agent/execution', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            taskId: task.id,
+            executionMode: 'parallel',
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(`Task ${task.id}: ${error || response.statusText}`);
+        }
+
+        return response;
+      });
+
+      await Promise.all(executionPromises);
+
+      // Refresh data after execution
+      mutateTasks();
+      mutateDocument();
+
+      toast.success('All tasks execution initiated successfully');
+    } catch (error) {
+      console.error('Error executing tasks:', error);
+      toast.error('Failed to execute some tasks');
+    }
+  };
+
+  // Handler for summary generation
+  const handleSummarize = () => {
+    if (!mockResponses || mockResponses.length === 0) {
+      toast.warning('No task responses available to summarize');
+      return;
+    }
+
+    toast.info('Requesting summary from orchestrator...');
+    // TODO: Implement summary generation via A2A agent
+  };
+
+  // Debug logging for canvas state
+  console.log('[Canvas Render] Current state:', {
+    status,
+    hasDocument: !!canvasDocument,
+    taskCount: uiTasks.length,
+    agentCount: mockAgents.length,
+    responseCount: mockResponses.length,
+    isGenerating: status === 'streaming' && uiTasks.length === 0,
+    taskIds: taskIds,
+  });
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="relative size-full">
+        {/* Show debug info in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="absolute top-0 right-0 z-50 bg-black/80 text-white text-xs p-2 rounded-bl">
+            Tasks: {uiTasks.length} | Agents: {mockAgents.length} | Status:{' '}
+            {status}
+          </div>
+        )}
+        <CanvasFlow
+          tasks={uiTasks}
+          agents={mockAgents}
+          responses={mockResponses}
+          summary={null} // TODO: Implement summary from database
+          onExecuteAllAgents={handleExecuteAllAgents}
+          onSummarize={handleSummarize}
+          isGenerating={status === 'streaming' && uiTasks.length === 0}
+          allAgentsExecuted={mockResponses.length === uiTasks.length}
+        />
+      </div>
+    </div>
+  );
+};
 
 interface CanvasArtifactMetadata {
   taskId?: string; // The task ID from Python agent (for execution)
@@ -312,232 +530,19 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
     getDocumentContentById,
     isLoading,
     metadata,
-    setMetadata,
   }) => {
-    if (isLoading) {
-      return <DocumentSkeleton artifactKind="canvas" />;
-    }
-
-    if (mode === 'diff') {
-      const oldContent = getDocumentContentById(currentVersionIndex - 1);
-      const newContent = getDocumentContentById(currentVersionIndex);
-
-      return (
-        <div className="flex flex-col py-8 md:p-20 px-4">
-          <div className="text-sm text-muted-foreground mb-4">
-            Canvas diff view not available
-          </div>
-          <div className="bg-muted p-4 rounded-lg">
-            <div className="font-semibold mb-2">Previous:</div>
-            <div className="text-sm">{oldContent}</div>
-            <div className="font-semibold mb-2 mt-4">Current:</div>
-            <div className="text-sm">{newContent}</div>
-          </div>
-        </div>
-      );
-    }
-
-    // Handler for executing all agents via Python orchestrator
-    const handleExecuteAllAgents = async () => {
-      const agents = metadata?.agents || [];
-
-      console.log('Execute clicked - Current metadata:', metadata);
-      console.log('TaskId in metadata:', metadata?.taskId);
-
-      if (!agents.length) {
-        toast.warning('No agents available to execute');
-        return;
-      }
-
-      // Get taskId from metadata (set when task was created)
-      const taskId = metadata?.taskId;
-
-      if (!taskId) {
-        console.error('No taskId found in metadata:', metadata);
-        toast.error('No task ID found. Please create a task first.');
-        return;
-      }
-
-      toast.info(`Executing ${agents.length} agents...`);
-
-      // Update all jobs to in-progress when execution starts
-      setMetadata((metadata) => ({
-        ...metadata,
-        tasks: (metadata?.tasks || []).map((task) => ({
-          ...task,
-          status: 'in-progress' as const,
-        })),
-      }));
-
-      try {
-        // Call API endpoint with taskId
-        const response = await fetch('/api/agent/execution', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            taskId,
-            executionMode: 'parallel',
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.text();
-          throw new Error(error || response.statusText);
-        }
-
-        // The API returns an SSE stream
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error('No response stream available');
-        }
-
-        // Process the SSE stream
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                const eventType =
-                  typeof data.type === 'string'
-                    ? data.type.replace(/^data-/, '')
-                    : '';
-
-                // Handle different event types
-                if (eventType === 'execution-started') {
-                  console.log('Execution started:', data.message);
-                } else if (
-                  eventType === 'job-update' ||
-                  data.type === 'job-update'
-                ) {
-                  // Handle both old and new job-update formats
-                  const jobData = data.data || data;
-                  console.log('Job update:', jobData);
-                  setMetadata((metadata) => ({
-                    ...metadata,
-                    taskId: metadata?.taskId, // Preserve taskId
-                    responses: [
-                      ...(metadata?.responses || []),
-                      {
-                        ...jobData,
-                        timestamp: new Date(jobData.timestamp),
-                      },
-                    ],
-                    tasks: (metadata?.tasks || []).map((job) =>
-                      job.id === jobData.jobId
-                        ? {
-                            ...job,
-                            status: jobData.status || ('completed' as const),
-                          }
-                        : job,
-                    ),
-                  }));
-                } else if (
-                  eventType === 'summary-update' ||
-                  data.type === 'summary-update'
-                ) {
-                  // Handle both old and new summary-update formats
-                  const summaryData = data.data || data;
-                  console.log('Summary update:', summaryData);
-                  setMetadata((metadata) => ({
-                    ...metadata,
-                    taskId: metadata?.taskId, // Preserve taskId
-                    summary: {
-                      ...summaryData,
-                      timestamp: new Date(summaryData.timestamp),
-                    },
-                  }));
-                } else if (eventType === 'execution-completed') {
-                  toast.success('Agent execution completed successfully');
-                } else if (eventType === 'execution-error') {
-                  throw new Error(data.error);
-                }
-              } catch (parseError) {
-                console.error('Error parsing SSE data:', parseError);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error executing agents:', error);
-        toast.error('Failed to execute agents');
-
-        // Revert job statuses on error
-        setMetadata((metadata) => ({
-          ...metadata,
-          tasks: (metadata?.tasks || []).map((task) => ({
-            ...task,
-            status: 'pending' as const,
-          })),
-        }));
-      }
-    };
-
-    // Handler for summary generation
-    const handleSummarize = () => {
-      const responses = metadata?.responses || [];
-      if (responses.length === 0) {
-        toast.warning('No agent responses available to summarize');
-        return;
-      }
-
-      if (metadata?.summary) {
-        toast.info('Summary already exists');
-        return;
-      }
-
-      toast.info('Requesting summary from orchestrator...');
-      // Python agent will generate and stream the summary
-    };
-
-    // Debug logging for canvas state
-    console.log('[Canvas Render] Current state:', {
-      status,
-      hasMetadata: !!metadata,
-      taskCount: metadata?.tasks?.length || 0,
-      agentCount: metadata?.agents?.length || 0,
-      responseCount: metadata?.responses?.length || 0,
-      isGenerating:
-        status === 'streaming' &&
-        (!metadata?.tasks || metadata.tasks.length === 0),
-    });
-
     return (
-      <div className="flex flex-col h-full">
-        <div className="relative size-full">
-          {/* Show debug info in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="absolute top-0 right-0 z-50 bg-black/80 text-white text-xs p-2 rounded-bl">
-              Tasks: {metadata?.tasks?.length || 0} | Agents:{' '}
-              {metadata?.agents?.length || 0} | Status: {status}
-            </div>
-          )}
-          <CanvasFlow
-            tasks={metadata?.tasks || []}
-            agents={metadata?.agents || []}
-            responses={metadata?.responses || []}
-            summary={metadata?.summary || null}
-            onExecuteAllAgents={handleExecuteAllAgents}
-            onSummarize={handleSummarize}
-            isGenerating={
-              status === 'streaming' &&
-              (!metadata?.tasks || metadata.tasks.length === 0)
-            }
-            allAgentsExecuted={(metadata?.agents || []).every((agent) =>
-              (metadata?.responses || []).some((r) => r.agentId === agent.id),
-            )}
-          />
-        </div>
-      </div>
+      <CanvasContent
+        mode={mode}
+        status={status}
+        content={content}
+        isCurrentVersion={isCurrentVersion}
+        currentVersionIndex={currentVersionIndex}
+        onSaveContent={onSaveContent}
+        getDocumentContentById={getDocumentContentById}
+        isLoading={isLoading}
+        metadata={metadata}
+      />
     );
   },
   actions: [
