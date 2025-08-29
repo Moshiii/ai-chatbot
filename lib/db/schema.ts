@@ -11,7 +11,22 @@ import {
   boolean,
   serial,
   bigint,
+  pgEnum,
+  jsonb,
 } from 'drizzle-orm/pg-core';
+
+// A2A Task Status Enum
+export const taskStatusEnum = pgEnum('task_status', [
+  'submitted',
+  'working',
+  'input-required',
+  'completed',
+  'canceled',
+  'failed',
+  'rejected',
+  'auth-required',
+  'unknown',
+]);
 
 export const user = pgTable('User', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
@@ -96,6 +111,7 @@ export const message = pgTable('Message', {
   parts: json('parts').notNull(),
   attachments: json('attachments').notNull(),
   createdAt: timestamp('createdAt').notNull(),
+  data: jsonb('data'), // To store { artifactType: 'document', documentId: '...' } or similar
 });
 
 export type DBMessage = InferSelectModel<typeof message>;
@@ -130,6 +146,7 @@ export const document = pgTable(
     userId: uuid('userId')
       .notNull()
       .references(() => user.id),
+    taskIds: jsonb('task_ids').$type<string[]>(), // Array of task IDs linked to this document
   },
   (table) => ({
     documentCompoundKey: primaryKey({
@@ -181,3 +198,21 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+// A2A Tasks Table
+export const tasks = pgTable('tasks', {
+  id: text('id').primaryKey(), // Task ID from A2A Task.id
+  contextId: text('context_id').notNull(),
+  status: taskStatusEnum('status').notNull().default('submitted'),
+  statusMessage: text('status_message'),
+  result: jsonb('result'),
+  webhookToken: text('webhook_token').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export type Task = InferSelectModel<typeof tasks>;
