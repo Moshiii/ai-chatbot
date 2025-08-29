@@ -14,7 +14,7 @@ import {
 import { memo } from 'react';
 import equal from 'fast-deep-equal';
 import { toast } from 'sonner';
-import type { ChatMessage } from '@/lib/types';
+import type { UIMessage } from 'ai';
 
 export function PureMessageActions({
   chatId,
@@ -23,7 +23,7 @@ export function PureMessageActions({
   isLoading,
 }: {
   chatId: string;
-  message: ChatMessage;
+  message: UIMessage;
   vote: Vote | undefined;
   isLoading: boolean;
 }) {

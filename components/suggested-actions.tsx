@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { memo } from 'react';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import type { VisibilityType } from './visibility-selector';
-import type { ChatMessage } from '@/lib/types';
+import type { UIMessage } from 'ai';
 import { useSession } from 'next-auth/react';
 import { guestRegex } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
@@ -37,7 +37,7 @@ const SUGGESTED_ACTIONS = [
 
 interface SuggestedActionsProps {
   chatId: string;
-  sendMessage: UseChatHelpers<ChatMessage>['sendMessage'];
+  sendMessage: UseChatHelpers<UIMessage>['sendMessage'];
   selectedVisibilityType: VisibilityType;
 }
 

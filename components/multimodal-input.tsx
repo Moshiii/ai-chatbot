@@ -27,7 +27,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown } from 'lucide-react';
 import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import type { VisibilityType } from './visibility-selector';
-import type { Attachment, ChatMessage } from '@/lib/types';
+import type { Attachment } from '@/lib/types';
 import { useSession } from 'next-auth/react';
 import { guestRegex } from '@/lib/constants';
 import { useRouter } from 'next/navigation';
@@ -49,13 +49,13 @@ function PureMultimodalInput({
   chatId: string;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
-  status: UseChatHelpers<ChatMessage>['status'];
+  status: UseChatHelpers<UIMessage>['status'];
   stop: () => void;
   attachments: Array<Attachment>;
   setAttachments: Dispatch<SetStateAction<Array<Attachment>>>;
   messages: Array<UIMessage>;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  sendMessage: UseChatHelpers<ChatMessage>['sendMessage'];
+  setMessages: UseChatHelpers<UIMessage>['setMessages'];
+  sendMessage: UseChatHelpers<UIMessage>['sendMessage'];
   className?: string;
   selectedVisibilityType: VisibilityType;
 }) {
@@ -64,7 +64,7 @@ function PureMultimodalInput({
   const { width } = useWindowSize();
   const { data: session } = useSession();
   const router = useRouter();
-  
+
   const isGuest = guestRegex.test(session?.user?.email ?? '');
   const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
 
@@ -176,13 +176,16 @@ function PureMultimodalInput({
   ]);
 
   // Custom sendMessage wrapper that checks for guest users
-  const handleSendMessage = useCallback(async (message: any) => {
-    if (isGuest) {
-      router.push('/login');
-      return;
-    }
-    return sendMessage(message);
-  }, [isGuest, router, sendMessage]);
+  const handleSendMessage = useCallback(
+    async (message: any) => {
+      if (isGuest) {
+        router.push('/login');
+        return;
+      }
+      return sendMessage(message);
+    },
+    [isGuest, router, sendMessage],
+  );
 
   const uploadFile = async (file: File) => {
     // Allow guest users to select files but redirect on submit
@@ -334,10 +337,7 @@ function PureMultimodalInput({
 
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <PureAttachmentsButton
-            fileInputRef={fileInputRef}
-            status={status}
-          />
+          <PureAttachmentsButton fileInputRef={fileInputRef} status={status} />
           {status === 'submitted' && (
             <PureStopButton stop={stop} setMessages={setMessages} />
           )}
@@ -371,7 +371,7 @@ function PureAttachmentsButton({
   status,
 }: {
   fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
-  status: UseChatHelpers<ChatMessage>['status'];
+  status: UseChatHelpers<UIMessage>['status'];
 }) {
   return (
     <Button
@@ -396,7 +396,7 @@ function PureStopButton({
   setMessages,
 }: {
   stop: () => void;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
+  setMessages: UseChatHelpers<UIMessage>['setMessages'];
 }) {
   return (
     <Button

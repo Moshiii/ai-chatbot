@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { UIMessage } from 'ai';
 
 import type { ArtifactKind } from '@/components/artifact';
 import type { Suggestion } from './db/schema';
@@ -56,7 +55,8 @@ export const transformTaskStatusToUI = (
   }
 };
 
-// Use standard AI SDK tool types
+// Use AI SDK v5 tool types - tools are defined as records with tool names
+// Use any to be compatible with different tool implementations
 export type ChatTools = Record<string, any>;
 
 export type CustomUIDataTypes = {
@@ -77,11 +77,8 @@ export type CustomUIDataTypes = {
   };
 };
 
-export type ChatMessage = UIMessage<
-  MessageMetadata,
-  CustomUIDataTypes,
-  ChatTools
->;
+// Use UIMessage directly from AI SDK v5 - no custom wrapper needed
+// The metadata and data types are handled through the parts structure
 
 export interface Attachment {
   name: string;

@@ -26,8 +26,9 @@ export function DataStreamHandler() {
 
       if (artifactDefinition?.onStreamPart) {
         try {
+          // Type assertion to handle the union type
           artifactDefinition.onStreamPart({
-            streamPart: delta,
+            streamPart: delta as any,
             setArtifact,
             setMetadata,
           });
@@ -66,7 +67,8 @@ export function DataStreamHandler() {
               status: 'streaming',
               // Auto-open canvas to ensure it receives streaming events
               // Otherwise jobs streamed while canvas is closed will be lost
-              isVisible: delta.data === 'canvas' ? true : draftArtifact.isVisible,
+              isVisible:
+                delta.data === 'canvas' ? true : draftArtifact.isVisible,
             };
 
           case 'data-clear':

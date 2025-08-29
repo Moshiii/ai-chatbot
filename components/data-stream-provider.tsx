@@ -4,11 +4,12 @@ import React, { createContext, useContext, useMemo, useState } from 'react';
 import type { DataUIPart } from 'ai';
 import type { CustomUIDataTypes } from '@/lib/types';
 
+// Union type to handle both specific and generic data parts
+type DataStreamItem = DataUIPart<CustomUIDataTypes> | DataUIPart<any>;
+
 interface DataStreamContextValue {
-  dataStream: DataUIPart<CustomUIDataTypes>[];
-  setDataStream: React.Dispatch<
-    React.SetStateAction<DataUIPart<CustomUIDataTypes>[]>
-  >;
+  dataStream: DataStreamItem[];
+  setDataStream: React.Dispatch<React.SetStateAction<DataStreamItem[]>>;
 }
 
 const DataStreamContext = createContext<DataStreamContextValue | null>(null);
@@ -18,9 +19,7 @@ export function DataStreamProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [dataStream, setDataStream] = useState<DataUIPart<CustomUIDataTypes>[]>(
-    [],
-  );
+  const [dataStream, setDataStream] = useState<DataStreamItem[]>([]);
 
   const value = useMemo(() => ({ dataStream, setDataStream }), [dataStream]);
 
