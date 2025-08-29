@@ -27,6 +27,9 @@ import {
   type DBMessage,
   type Chat,
   stream,
+  task,
+  taskStatusEnum,
+  type Task,
 } from './schema';
 import type { ArtifactKind } from '@/components/artifact';
 import { generateUUID } from '../utils';
@@ -600,6 +603,116 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
     throw new ChatSDKError(
       'bad_request:database',
       'Failed to get stream ids by chat id',
+    );
+  }
+}
+
+// Task-related query functions
+export async function getTaskById({ id }: { id: string }): Promise<Task[]> {
+  try {
+    return await db.select().from(task).where(eq(task.id, id));
+  } catch (error) {
+    throw new ChatSDKError('bad_request:database', 'Failed to get task by id');
+  }
+}
+
+export async function getTasksByContextId({
+  contextId,
+}: { contextId: string }): Promise<Task[]> {
+  try {
+    return await db
+      .select()
+      .from(task)
+      .where(eq(task.contextId, contextId))
+      .orderBy(desc(task.createdAt));
+  } catch (error) {
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to get tasks by context id',
+    );
+  }
+}
+
+export async function createTask({
+  id,
+  contextId,
+  status,
+  statusMessage,
+  result,
+  webhookToken,
+}: {
+  id: string;
+  contextId: string;
+  status?: (typeof taskStatusEnum)[number];
+  statusMessage?: string;
+  result?: any;
+  webhookToken: string;
+}) {
+  try {
+    return await db
+      .insert(task)
+      .values({
+        id,
+        contextId,
+        status: status || 'submitted',
+        statusMessage,
+        result,
+        webhookToken,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+  } catch (error) {
+    throw new ChatSDKError('bad_request:database', 'Failed to create task');
+  }
+}
+
+export async function updateTask({
+  id,
+  status,
+  statusMessage,
+  result,
+}: {
+  id: string;
+  status?: (typeof taskStatusEnum)[number];
+  statusMessage?: string;
+  result?: any;
+}) {
+  try {
+    return await db
+      .update(task)
+      .set({
+        status,
+        statusMessage,
+        result,
+        updatedAt: new Date(),
+      })
+      .where(eq(task.id, id))
+      .returning();
+  } catch (error) {
+    throw new ChatSDKError('bad_request:database', 'Failed to update task');
+  }
+}
+
+export async function updateDocumentTaskIds({
+  documentId,
+  taskIds,
+}: {
+  documentId: string;
+  taskIds: string[];
+}) {
+  try {
+    return await db
+      .update(document)
+      .set({
+        taskIds,
+      })
+      .where(eq(document.id, documentId))
+      .returning();
+  } catch (error) {
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to update document task ids',
     );
   }
 }
