@@ -119,6 +119,12 @@ export class A2aChatLanguageModel implements LanguageModelV2 {
         configuration: {
           blocking: false,
           acceptedOutputModes: ['text/plain', 'application/json'],
+          pushNotificationConfig: this.settings.pushNotificationConfig
+            ? {
+                url: this.settings.pushNotificationConfig.url,
+                token: this.settings.pushNotificationConfig.token,
+              }
+            : undefined,
         },
       });
       console.log('[A2A] Stream response received, creating stream');
@@ -153,6 +159,12 @@ export class A2aChatLanguageModel implements LanguageModelV2 {
       role: 'user',
       parts,
       contextId: this.settings.contextId,
+      // Include canvas document ID in metadata for A2A agent
+      ...(this.settings.documentId && {
+        metadata: {
+          canvasDocumentId: this.settings.documentId,
+        },
+      }),
     };
   }
 

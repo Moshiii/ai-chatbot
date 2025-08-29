@@ -14,6 +14,7 @@ export interface A2aSettings {
     token: string; // Authentication token for webhook (auto-generated if not provided)
   };
   chatId?: string; // Chat session ID for context mapping
+  documentId?: string; // Canvas document ID to include in message context
 }
 
 export function a2a(
