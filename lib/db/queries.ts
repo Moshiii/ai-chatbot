@@ -18,18 +18,20 @@ import postgres from 'postgres';
 import {
   user,
   chat,
-  type User,
   document,
-  type Suggestion,
   suggestion,
   message,
   vote,
-  type DBMessage,
-  type Chat,
   stream,
   task,
+} from './schema';
+import type {
+  User,
+  Suggestion,
+  DBMessage,
+  Chat,
+  Task,
   taskStatusEnum,
-  type Task,
 } from './schema';
 import type { ArtifactKind } from '@/components/artifact';
 import { generateUUID } from '../utils';
