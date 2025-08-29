@@ -6,7 +6,7 @@ import {
 } from '@/lib/db/queries';
 import type { Chat } from '@/lib/db/schema';
 import { ChatSDKError } from '@/lib/errors';
-import type { ChatMessage } from '@/lib/types';
+import type { UIMessage } from 'ai';
 import { createUIMessageStream, JsonToSseTransformStream } from 'ai';
 import { getStreamContext } from '../../route';
 import { differenceInSeconds } from 'date-fns';
@@ -62,7 +62,7 @@ export async function GET(
     return new ChatSDKError('not_found:stream').toResponse();
   }
 
-  const emptyDataStream = createUIMessageStream<ChatMessage>({
+  const emptyDataStream = createUIMessageStream<UIMessage>({
     execute: () => {},
   });
 
@@ -92,7 +92,7 @@ export async function GET(
       return new Response(emptyDataStream, { status: 200 });
     }
 
-    const restoredStream = createUIMessageStream<ChatMessage>({
+    const restoredStream = createUIMessageStream<UIMessage>({
       execute: ({ writer }) => {
         writer.write({
           type: 'data-appendMessage',

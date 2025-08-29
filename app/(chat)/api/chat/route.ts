@@ -38,7 +38,7 @@ import {
 } from 'resumable-stream';
 import { after } from 'next/server';
 import { ChatSDKError } from '@/lib/errors';
-import type { ChatMessage } from '@/lib/types';
+import type { UIMessage } from 'ai';
 import type { ChatModel } from '@/lib/ai/models';
 import type { VisibilityType } from '@/components/visibility-selector';
 
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       selectedVisibilityType,
     }: {
       id: string;
-      message: ChatMessage;
+      message: UIMessage;
       selectedChatModel: ChatModel['id'];
       selectedVisibilityType: VisibilityType;
     } = requestBody;
