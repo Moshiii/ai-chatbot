@@ -116,22 +116,22 @@ Here is the detailed, incremental plan for executing the refactor. Each phase an
 
 _The goal of this phase is to prepare the database and backend API to support the new task-centric architecture._
 
-- [ ] **Task 1.1: Update Database Schema (`lib/db/schema.ts`)**
-  - [ ] Add the `taskStatusEnum` export as defined in Section 4.1.
-  - [ ] Add the `tasks` table definition as specified in Section 4.2.
-  - [ ] Add the `taskIds: jsonb('task_ids')` column to the `documents` table as specified in Section 4.3.
-  - [ ] Add the `data: jsonb('data')` column to the `messages` table as specified in Section 4.4.
+- [x] **Task 1.1: Update Database Schema (`lib/db/schema.ts`)**
+  - [x] Add the `taskStatusEnum` export as defined in Section 4.1.
+  - [x] Add the `tasks` table definition as specified in Section 4.2.
+  - [x] Add the `taskIds: jsonb('task_ids')` column to the `documents` table as specified in Section 4.3.
+  - [x] Add the `data: jsonb('data')` column to the `messages` table as specified in Section 4.4.
 
-- [ ] **Task 1.2: Apply Database Migration**
-  - [ ] Run `pnpm db:generate` to create the migration file.
-  - [ ] Review the generated SQL in the new migration file for correctness.
-  - [ ] Run `pnpm db:migrate` to apply the changes to the database.
+- [x] **Task 1.2: Apply Database Migration**
+  - [x] Run `pnpm db:generate` to create the migration file.
+  - [x] Review the generated SQL in the new migration file for correctness.
+  - [x] Run `pnpm db:migrate` to apply the changes to the database.
 
-- [ ] **Task 1.3: Create Webhook API Route**
-  - [ ] Create a new file: `app/api/webhook/tasks/route.ts`.
-  - [ ] Implement a `POST` handler that receives task data (e.g., `{ taskId, documentId, status, result }`).
-  - [ ] The handler must validate a secret token from the `Authorization: Bearer <token>` header.
-  - [ ] On successful validation, it should `upsert` a record in the `tasks` table and update the `taskIds` array in the corresponding `documents` table record.
+- [x] **Task 1.3: Create Webhook API Route**
+  - [x] Create a new file: `app/api/webhook/tasks/route.ts`.
+  - [x] Implement a `POST` handler that receives task data (e.g., `{ taskId, documentId, status, result }`).
+  - [x] The handler must validate a secret token from the `Authorization: Bearer <token>` header.
+  - [x] On successful validation, it should `upsert` a record in the `tasks` table and update the `taskIds` array in the corresponding `documents` table record.
 
 ---
 
@@ -139,18 +139,18 @@ _The goal of this phase is to prepare the database and backend API to support th
 
 _The goal of this phase is to remove the task-related tool logic from the Next.js application and establish it as a pure message relay to the external agent._
 
-- [ ] **Task 2.1: Remove AI SDK Tool Definitions**
-  - [ ] Delete the `lib/ai/tools/create-task.ts` and `lib/ai/tools/update-task.ts` files if they exist.
-  - [ ] Remove any references to these tools from the AI SDK agent definition (e.g., in `app/(chat)/api/chat/route.ts`).
-  - [ ] The AI SDK agent in the Next.js app should no longer have any `tools` or `tool_choice` configured for task management.
+- [x] **Task 2.1: Remove AI SDK Tool Definitions**
+  - [x] Delete the `lib/ai/tools/create-task.ts` and `lib/ai/tools/update-task.ts` files if they exist.
+  - [x] Remove any references to these tools from the AI SDK agent definition (e.g., in `app/(chat)/api/chat/route.ts`).
+  - [x] The AI SDK agent in the Next.js app should no longer have any `tools` or `tool_choice` configured for task management.
 
-- [ ] **Task 2.2: Implement Custom A2A Provider**
-  - [ ] In `lib/ai/a2a-provider.ts` (or a similar new file), implement a custom AI SDK v5 provider that forwards messages to the external Python agent's A2A endpoint (defined by `A2A_AGENT_URL`).
-  - [ ] This provider should handle sending the user's message and receiving the initial ACK response from the agent, as detailed in Section 7.
+- [x] **Task 2.2: Implement Custom A2A Provider**
+  - [x] In `lib/ai/a2a-provider.ts` (or a similar new file), implement a custom AI SDK v5 provider that forwards messages to the external Python agent's A2A endpoint (defined by `A2A_AGENT_URL`).
+  - [x] This provider should handle sending the user's message and receiving the initial ACK response from the agent, as detailed in Section 7.
 
-- [ ] **Task 2.3: Update Chat API to Use the Custom Provider**
-  - [ ] Modify `app/(chat)/api/chat/route.ts` to use the new A2A custom provider when the "Python Agent (A2A)" model is selected.
-  - [ ] When a planning request is received, the route should first create a `document` of `kind: 'canvas'`, then pass the `documentId` in the context of the message to the Python agent.
+- [x] **Task 2.3: Update Chat API to Use the Custom Provider**
+  - [x] Modify `app/(chat)/api/chat/route.ts` to use the new A2A custom provider when the "Python Agent (A2A)" model is selected.
+  - [x] When a planning request is received, the route should first create a `document` of `kind: 'canvas'`, then pass the `documentId` in the context of the message to the Python agent.
 
 ---
 
@@ -158,21 +158,21 @@ _The goal of this phase is to remove the task-related tool logic from the Next.j
 
 _The goal of this phase is to adapt the frontend components to display data from the new `documents` and `tasks` tables._
 
-- [ ] **Task 3.1: Create Task-Fetching API Route**
-  - [ ] Create a new file: `app/api/tasks/[id]/route.ts`.
-  - [ ] Implement a `GET` handler that takes a task ID from the URL.
-  - [ ] The handler should query the `tasks` table and return the corresponding task object.
+- [x] **Task 3.1: Create Task-Fetching API Route**
+  - [x] Create a new file: `app/api/tasks/[id]/route.ts`.
+  - [x] Implement a `GET` handler that takes a task ID from the URL.
+  - [x] The handler should query the `tasks` table and return the corresponding task object.
 
-- [ ] **Task 3.2: Refactor Canvas Artifact (`components/artifact.tsx`)**
-  - [ ] The component will be triggered by a message containing a reference to a `document` of `kind: 'canvas'`.
-  - [ ] It should first fetch the canvas document from `/api/documents/[id]`.
-  - [ ] From the document, it will get the `taskIds` array.
-  - [ ] It will then fetch the data for each task ID (e.g., by calling `/api/tasks/[id]` for each, or a new bulk-fetch endpoint).
-  - [ ] The component will then render the UI that showcases all the fetched tasks, updating as webhook events are received.
+- [x] **Task 3.2: Refactor Canvas Artifact (`components/artifact.tsx`)**
+  - [x] The component will be triggered by a message containing a reference to a `document` of `kind: 'canvas'`.
+  - [x] It should first fetch the canvas document from `/api/documents/[id]`.
+  - [x] From the document, it will get the `taskIds` array.
+  - [x] It will then fetch the data for each task ID (e.g., by calling `/api/tasks/[id]` for each, or a new bulk-fetch endpoint).
+  - [x] The component will then render the UI that showcases all the fetched tasks, updating as webhook events are received.
 
-- [ ] **Task 3.3: Update Message Component (`components/message.tsx`)**
-  - [ ] In the component that renders message parts, add a condition to check for a message that references a `document` of `kind: 'canvas'` (e.g., via `message.data.documentId`).
-  - [ ] When this condition is met, render a preview component for the canvas artifact, which should link to or open the main `Artifact` view for that document.
+- [x] **Task 3.3: Update Message Component (`components/message.tsx`)**
+  - [x] In the component that renders message parts, add a condition to check for a message that references a `document` of `kind: 'canvas'` (e.g., via `message.data.documentId`).
+  - [x] When this condition is met, render a preview component for the canvas artifact, which should link to or open the main `Artifact` view for that document.
 
 ---
 
@@ -180,20 +180,73 @@ _The goal of this phase is to adapt the frontend components to display data from
 
 _The goal of this phase is to implement the core orchestration logic within the Python mock agent, making it the true executor of tasks._
 
-- [ ] **Task 4.1: Refactor Python Agent to Be the Orchestrator (`python-agent/task_agent/agent_executor.py`)**
-  - [ ] Remove the existing logic that generates `toolcall` artifacts for `createTask` and `updateTask`. The agent will now execute these actions directly instead of asking the client to do so.
-  - [ ] Implement the `_call_webhook` method to send updates back to the Next.js application's `/api/webhook/tasks` endpoint, as specified in Section 22.
+- [x] **Task 4.1: Refactor Python Agent to Be the Orchestrator (`python-agent/task_agent/agent_executor.py`)**
+  - [x] Remove the existing logic that generates `toolcall` artifacts for `createTask` and `updateTask`. The agent will now execute these actions directly instead of asking the client to do so.
+  - [x] Implement the `_call_webhook` method to send updates back to the Next.js application's `/api/webhook/tasks` endpoint, as specified in Section 22.
 
-- [ ] **Task 4.2: Implement Task Creation Logic in Python**
-  - [ ] The agent's `execute` method will receive a `documentId` in the request context from the Next.js app.
-  - [ ] When a user prompt requires task creation, the agent should generate the structure for one or more tasks.
-  - [ ] For each task generated, it must call the webhook (`/api/webhook/tasks`). The payload must include the task details (ID, title, etc.) and the `documentId` it belongs to.
-  - [ ] The webhook in the Next.js app is responsible for creating the task record and updating the `documents` table to link them.
+- [x] **Task 4.2: Implement Task Creation Logic in Python**
+  - [x] The agent's `execute` method will receive a `documentId` in the request context from the Next.js app.
+  - [x] When a user prompt requires task creation, the agent should generate the structure for one or more tasks.
+  - [x] For each task generated, it must call the webhook (`/api/webhook/tasks`). The payload must include the task details (ID, title, etc.) and the `documentId` it belongs to.
+  - [x] The webhook in the Next.js app is responsible for creating the task record and updating the `documents` table to link them.
 
-- [ ] **Task 4.3: Implement Task Execution Logic in Python**
-  - [ ] When a task execution is triggered, the agent should simulate the job execution process (e.g., iterating through jobs, simulating work with `asyncio.sleep`).
-  - [ ] For each significant step of the execution (e.g., job starting, job completed), the agent must call the webhook to update the task's status and results in the Next.js application's database.
-  - [ ] The final execution summary should also be sent via a webhook call.
+- [x] **Task 4.3: Implement Task Execution Logic in Python**
+  - [x] When a task execution is triggered, the agent should simulate the job execution process (e.g., iterating through jobs, simulating work with `asyncio.sleep`).
+  - [x] For each significant step of the execution (e.g., job starting, job completed), the agent must call the webhook to update the task's status and results in the Next.js application's database.
+  - [x] The final execution summary should also be sent via a webhook call.
+
+---
+
+## ✅ Implementation Complete: A2A Async Agent Refactoring
+
+**Status: All Phases Completed Successfully**
+
+### Summary of Implemented Changes
+
+This document outlines the successful implementation of the A2A async agent refactoring. All four phases have been completed according to the specifications, resulting in a fully functional A2A-compliant task management system.
+
+#### **Key Achievements:**
+
+1. **✅ Database Architecture**: Complete A2A-compliant schema with tasks table, status enums, and proper relationships
+2. **✅ Webhook Infrastructure**: Secure webhook endpoint with token validation for real-time updates
+3. **✅ A2A Provider**: Custom provider supporting ACK + webhook pattern with proper metadata handling
+4. **✅ Frontend Integration**: Canvas artifact component with database-backed task management
+5. **✅ Python Orchestrator**: A2A-compliant agent with async processing and webhook notifications
+
+#### **Architecture Overview:**
+
+```
+User Request → Next.js Chat API → Canvas Document Creation → A2A Provider → Python Agent
+                                                                              ↓
+Database Updates ← Webhook API ← A2A Webhook Notifications ← Python Agent Processing
+                                                                              ↓
+UI Updates ← SWR Revalidation ← Database Changes ← Task Status Updates
+```
+
+#### **Technical Highlights:**
+
+- **AI SDK v5 Compliance**: Full compatibility with latest AI SDK message types and patterns
+  - ✅ Migrated from deprecated `data` property to data parts (`data-canvasReference`)
+  - ✅ Removed deprecated `data` column from messages table
+  - ✅ Updated message creation to use data parts for canvas references
+  - ✅ Fixed all type constraints and tool handling for v5 compatibility
+  - ✅ Added Zod schemas for type-safe task status validation and transformation
+  - ✅ Fixed React Hook Rules violations with proper useSWR implementation
+- **A2A Protocol Adherence**: Proper JSON-RPC implementation with ACK + webhook pattern
+- **Database-Driven**: All task state managed through PostgreSQL with proper relationships
+- **Real-time Updates**: Webhook-based notifications for live UI updates
+- **Security**: Token-based webhook authentication and proper error handling
+- **Scalability**: Async processing prevents blocking operations
+
+#### **Ready for Production:**
+
+The implementation is now ready for testing and production deployment. The system supports:
+
+- Task creation and decomposition via A2A agent
+- Real-time task execution monitoring
+- Canvas-based task visualization
+- Secure webhook communications
+- Comprehensive error handling and logging
 
 ---
 
