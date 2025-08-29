@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/queries';
-import { tasks, document } from '@/lib/db/schema';
+import { task, document } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
@@ -33,29 +33,29 @@ export async function POST(request: NextRequest) {
     // Validate token against stored webhookToken for this task
     const existingTasks = await db
       .select()
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
+      .from(task)
+      .where(eq(task.id, taskId))
       .limit(1);
 
     if (!existingTasks.length) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    const task = existingTasks[0];
-    if (task.webhookToken !== providedToken) {
+    const foundTask = existingTasks[0];
+    if (foundTask.webhookToken !== providedToken) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
     // Update task status and result
     await db
-      .update(tasks)
+      .update(task)
       .set({
         status: status.state,
         statusMessage: status.message || null,
         result: artifacts || null,
         updatedAt: new Date(),
       })
-      .where(eq(tasks.id, taskId));
+      .where(eq(task.id, taskId));
 
     // Update document to link the task
     const existingDocuments = await db

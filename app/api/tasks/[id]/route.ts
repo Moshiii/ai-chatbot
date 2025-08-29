@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db/queries';
-import { tasks } from '@/lib/db/schema';
+import { task } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { auth } from '@/app/(auth)/auth';
 
@@ -26,18 +26,18 @@ export async function GET(
     // Fetch the task
     const taskData = await db
       .select()
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
+      .from(task)
+      .where(eq(task.id, taskId))
       .limit(1);
 
     if (!taskData.length) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    const task = taskData[0];
+    const foundTask = taskData[0];
 
     // Return task data (excluding sensitive webhook token)
-    const { webhookToken, ...safeTask } = task;
+    const { webhookToken, ...safeTask } = foundTask;
 
     return NextResponse.json(safeTask);
   } catch (error) {
