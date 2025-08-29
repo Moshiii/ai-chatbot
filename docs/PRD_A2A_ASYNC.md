@@ -2,7 +2,7 @@
 
 ### 1. Introduction & Goal
 
-This document outlines the requirements for refactoring the existing agent task management system to be fully compliant with the Agent-to-Agent (A2A) communication protocol. The goal is to **refactor the existing implementation to use a dedicated, A2A-compliant `tasks` table**, providing a more robust, scalable, and standardized architecture.
+This document outlines the requirements for refactoring the existing agent task management system to be fully compliant with the Agent-to-Agent (A2A) communication protocol. The primary goal is to centralize task-related tool logic within an external, A2A-compliant orchestrator agent, moving it out of the Next.js application. The Next.js backend will act as a thin client, relaying user messages to the agent and processing asynchronous updates via webhooks. This refactoring will replace the current `documents` table with a dedicated, A2A-compliant `tasks` table, providing a more robust, scalable, and standardized architecture.
 
 ### 2. Codebase Analysis & Current Architecture
 
@@ -20,7 +20,13 @@ The current system uses the generic `documents` table (with a `canvas` type) to 
 
 ### 3. Proposed Refactoring & Architecture
 
-The core of the refactoring is to replace the `documents` table as the backing store for tasks with a new `tasks` table. We will also introduce a true webhook mechanism for long-running tasks.
+The core of this refactoring is a fundamental shift in architecture. We will move all task-related business logic from the Vercel AI SDK agent running in the Next.js application to an external Python agent that acts as the orchestrator. The Next.js application will no longer define `createTask` or `updateTask` tools; instead, it will use a custom AI SDK provider to communicate with the Python agent.
+
+The new architecture will be as follows:
+1.  **Message Relay:** The Next.js backend will relay user messages to the external Python orchestrator agent via the A2A protocol, using a custom AI SDK provider.
+2.  **External Orchestration:** The Python agent (initially a mock, as defined in `python-agent/`) will receive the message and perform all task-related actions. This includes the logic previously handled by the `createTask` and `updateTask` tools within the Next.js application.
+3.  **DB Updates via Webhook:** The Python agent will communicate task creation, progress, and completion back to the Next.js application by calling a secure webhook endpoint. The Next.js app will then update the new `tasks` table in its database.
+4.  **UI Rendering:** The frontend will render task status and results based on the data in the `tasks` table, with real-time updates triggered by the webhooks.
 
 ### 4. Database Schema Changes
 
@@ -60,19 +66,22 @@ _The goal of this phase is to prepare the database and backend API to support th
 
 ---
 
-#### **Phase 2: Refactor Core Tools**
+#### **Phase 2: Decouple Next.js from Tool Logic**
 
-_The goal of this phase is to modify the existing AI tools to use the new `tasks` table instead of the `documents` table._
+_The goal of this phase is to remove the task-related tool logic from the Next.js application and establish it as a pure message relay to the external agent._
 
-- [ ] **Task 2.1: Refactor `createTask` Tool (`lib/ai/tools/create-task.ts`)**
-  - [ ] Remove the logic that creates a `document` of kind `canvas`.
-  - [ ] Import and use the `generateTaskIds` function from `lib/id-management.ts` to create a new task ID.
-  - [ ] Implement a call to `db.insert(tasks).values(...)` to create a new record in the `tasks` table with the initial data.
-  - [ ] When streaming data back to the client, ensure the `data` property of the message is populated with `{ artifactType: 'task', taskId: '...' }`.
+- [ ] **Task 2.1: Remove AI SDK Tool Definitions**
+  - [ ] Delete the `lib/ai/tools/create-task.ts` and `lib/ai/tools/update-task.ts` files if they exist.
+  - [ ] Remove any references to these tools from the AI SDK agent definition (e.g., in `app/(chat)/api/chat/route.ts`).
+  - [ ] The AI SDK agent in the Next.js app should no longer have any `tools` or `tool_choice` configured for task management.
 
-- [ ] **Task 2.2: Refactor `updateTask` Tool (`lib/ai/tools/update-task.ts`)**
-  - [ ] Modify the `execute` function to receive task/job updates.
-  - [ ] Implement a call to `db.update(tasks).set({ ... }).where(eq(tasks.id, ...))` to update the status and results of the task in the database.
+- [ ] **Task 2.2: Implement Custom A2A Provider**
+  - [ ] In `lib/ai/a2a-provider.ts` (or a similar new file), implement a custom AI SDK v5 provider that forwards messages to the external Python agent's A2A endpoint (defined by `A2A_AGENT_URL`).
+  - [ ] This provider should handle sending the user's message and receiving the initial ACK response from the agent, as detailed in Section 7.
+
+- [ ] **Task 2.3: Update Chat API to Use the Custom Provider**
+  - [ ] Modify `app/(chat)/api/chat/route.ts` to use the new A2A custom provider when the "Python Agent (A2A)" model is selected.
+  - [ ] The route should expect an ACK from the agent and use the information to create an initial entry in the `tasks` table, as described in Section 10.3.
 
 ---
 
@@ -96,15 +105,24 @@ _The goal of this phase is to adapt the frontend components to display data from
 
 ---
 
-#### **Phase 4: Agent Alignment & Final Testing**
+#### **Phase 4: Implement Python Orchestrator Logic**
 
-_The goal of this phase is to align the mock agent with the new flow and perform end-to-end testing._
+_The goal of this phase is to implement the core orchestration logic within the Python mock agent, making it the true executor of tasks._
 
-- [ ] **Task 4.1: Enhance Python Mock Agent (`python-agent/task_agent/agent_executor.py`)**
-  - [ ] Implement the `_call_webhook` method as described in Section 5.2.
-  - [ ] Modify the `_execute_jobs` method to call `_call_webhook` with the final results after the job simulation loop is complete.
+- [ ] **Task 4.1: Refactor Python Agent to Be the Orchestrator (`python-agent/task_agent/agent_executor.py`)**
+  - [ ] Remove the existing logic that generates `toolcall` artifacts for `createTask` and `updateTask`. The agent will now execute these actions directly instead of asking the client to do so.
+  - [ ] Implement the `_call_webhook` method to send updates back to the Next.js application's `/api/webhook/tasks` endpoint, as specified in Section 22.
 
-- [ ] **Task 4.2: Write End-to-End Tests**
+- [ ] **Task 4.2: Implement Task Creation Logic in Python**
+  - [ ] When a user prompt requires task creation, the agent should generate the task and job structure internally.
+  - [ ] After generating the task details, it must call the webhook with the new task's data (ID, title, status: 'submitted', etc.) so the Next.js backend can create a corresponding record in the `tasks` table.
+
+- [ ] **Task 4.3: Implement Task Execution Logic in Python**
+  - [ ] When a task execution is triggered, the agent should simulate the job execution process (e.g., iterating through jobs, simulating work with `asyncio.sleep`).
+  - [ ] For each significant step of the execution (e.g., job starting, job completed), the agent must call the webhook to update the task's status and results in the Next.js application's database.
+  - [ ] The final execution summary should also be sent via a webhook call.
+
+- [ ] **Task 4.4: Write End-to-End Tests**
   - [ ] Using Playwright, create a new test file for the A2A flow.
   - [ ] The test should simulate the full user journey:
     1. Sending a prompt that triggers task planning.
