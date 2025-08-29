@@ -881,122 +881,118 @@ export function CanvasFlow({
             <AlertDialogTitle>
               Confirm Batch Transaction - Execute All Agents
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {
-                <div className="space-y-4 text-sm">
-                  {/* Agents to Execute */}
-                  <div>
-                    <div className="font-medium text-base mb-2">
-                      Agents to Execute ({agents.length})
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
-                      {agents.map((agent, index) => {
-                        const price =
-                          typeof agent.pricingUsdt === 'number'
-                            ? agent.pricingUsdt
-                            : (() => {
-                                let hash = 0;
-                                const seed = `${agent.id}:${agent.name}`;
-                                for (let i = 0; i < seed.length; i++) {
-                                  hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-                                }
-                                const min = 0.25;
-                                const max = 2.5;
-                                const normalized = (hash % 1000) / 1000;
-                                return (
-                                  Math.round(
-                                    (min + normalized * (max - min)) * 100,
-                                  ) / 100
-                                );
-                              })();
-                        return (
-                          <div
-                            key={agent.id}
-                            className="flex justify-between items-center"
-                          >
-                            <span className="font-medium">
-                              {index + 1}. {agent.name}
-                            </span>
-                            <span className="text-gray-600">
-                              ${price.toFixed(2)} USDT
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Transaction Summary */}
-                  <div className="border-t pt-3">
-                    <div className="grid grid-cols-3 gap-x-4 gap-y-2">
-                      <div className="text-muted-foreground">Network</div>
-                      <div className="col-span-2">{networkName}</div>
-
-                      <div className="text-muted-foreground">From</div>
-                      <div className="col-span-2">Your wallet</div>
-
-                      <div className="text-muted-foreground">Token</div>
-                      <div className="col-span-2">{tokenSymbol}</div>
-
-                      <div className="text-muted-foreground">Total Amount</div>
-                      <div className="col-span-2 font-bold text-lg">
-                        ${calculateTotalCost().toFixed(2)} USDT
-                      </div>
-
-                      <div className="text-muted-foreground">Network fee</div>
-                      <div className="col-span-2">
-                        ~{(estimatedGasEth * agents.length).toFixed(6)} ETH (
-                        {agents.length} transactions)
-                      </div>
-
-                      <div className="text-muted-foreground">Est. time</div>
-                      <div className="col-span-2">{estimatedConfirmation}</div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
-                      onClick={() => setShowAdvancedTxDetails((v) => !v)}
-                    >
-                      {showAdvancedTxDetails ? (
-                        <ChevronUp className="size-3" />
-                      ) : (
-                        <ChevronDown className="size-3" />
-                      )}
-                      {showAdvancedTxDetails
-                        ? 'Hide advanced details'
-                        : 'Show advanced details'}
-                    </button>
-                    {showAdvancedTxDetails && (
-                      <div className="mt-2 rounded-md border p-3 space-y-1 text-xs">
-                        <div>
-                          <span className="font-medium">Batch Execution:</span>{' '}
-                          {agents.length} agents
-                        </div>
-                        <div>
-                          <span className="font-medium">Method:</span>{' '}
-                          executeAllAgents()
-                        </div>
-                        <div>
-                          <span className="font-medium">Total Tasks:</span>{' '}
-                          {tasks.length}
-                        </div>
-                        <div className="text-muted-foreground">
-                          All agents will be executed in parallel via the Python
-                          orchestrator.
-                        </div>
-                        <div className="text-muted-foreground">
-                          You will be asked to confirm this batch transaction in
-                          your wallet.
-                        </div>
-                      </div>
-                    )}
-                  </div>
+            <div className="space-y-4 text-sm text-muted-foreground">
+              {/* Agents to Execute */}
+              <div>
+                <div className="font-medium text-base mb-2">
+                  Agents to Execute ({agents.length})
                 </div>
-              }
-            </AlertDialogDescription>
+                <div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+                  {agents.map((agent, index) => {
+                    const price =
+                      typeof agent.pricingUsdt === 'number'
+                        ? agent.pricingUsdt
+                        : (() => {
+                            let hash = 0;
+                            const seed = `${agent.id}:${agent.name}`;
+                            for (let i = 0; i < seed.length; i++) {
+                              hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+                            }
+                            const min = 0.25;
+                            const max = 2.5;
+                            const normalized = (hash % 1000) / 1000;
+                            return (
+                              Math.round(
+                                (min + normalized * (max - min)) * 100,
+                              ) / 100
+                            );
+                          })();
+                    return (
+                      <div
+                        key={agent.id}
+                        className="flex justify-between items-center"
+                      >
+                        <span className="font-medium">
+                          {index + 1}. {agent.name}
+                        </span>
+                        <span className="text-gray-600">
+                          ${price.toFixed(2)} USDT
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Transaction Summary */}
+              <div className="border-t pt-3">
+                <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+                  <div className="text-muted-foreground">Network</div>
+                  <div className="col-span-2">{networkName}</div>
+
+                  <div className="text-muted-foreground">From</div>
+                  <div className="col-span-2">Your wallet</div>
+
+                  <div className="text-muted-foreground">Token</div>
+                  <div className="col-span-2">{tokenSymbol}</div>
+
+                  <div className="text-muted-foreground">Total Amount</div>
+                  <div className="col-span-2 font-bold text-lg">
+                    ${calculateTotalCost().toFixed(2)} USDT
+                  </div>
+
+                  <div className="text-muted-foreground">Network fee</div>
+                  <div className="col-span-2">
+                    ~{(estimatedGasEth * agents.length).toFixed(6)} ETH (
+                    {agents.length} transactions)
+                  </div>
+
+                  <div className="text-muted-foreground">Est. time</div>
+                  <div className="col-span-2">{estimatedConfirmation}</div>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
+                  onClick={() => setShowAdvancedTxDetails((v) => !v)}
+                >
+                  {showAdvancedTxDetails ? (
+                    <ChevronUp className="size-3" />
+                  ) : (
+                    <ChevronDown className="size-3" />
+                  )}
+                  {showAdvancedTxDetails
+                    ? 'Hide advanced details'
+                    : 'Show advanced details'}
+                </button>
+                {showAdvancedTxDetails && (
+                  <div className="mt-2 rounded-md border p-3 space-y-1 text-xs">
+                    <div>
+                      <span className="font-medium">Batch Execution:</span>{' '}
+                      {agents.length} agents
+                    </div>
+                    <div>
+                      <span className="font-medium">Method:</span>{' '}
+                      executeAllAgents()
+                    </div>
+                    <div>
+                      <span className="font-medium">Total Tasks:</span>{' '}
+                      {tasks.length}
+                    </div>
+                    <div className="text-muted-foreground">
+                      All agents will be executed in parallel via the Python
+                      orchestrator.
+                    </div>
+                    <div className="text-muted-foreground">
+                      You will be asked to confirm this batch transaction in
+                      your wallet.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setIsTxDialogOpen(false)}>
