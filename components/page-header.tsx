@@ -31,7 +31,7 @@ function PurePageHeader({
   const router = useRouter();
   const { open } = useSidebar();
   const { width: windowWidth } = useWindowSize();
-  
+
   const isGuest = guestRegex.test(session?.user?.email ?? '');
 
   return (
@@ -65,20 +65,18 @@ function PurePageHeader({
           {/* Only show balance for authenticated users when enabled */}
           {showBalance && !isGuest && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-950 rounded-md border border-green-200 dark:border-green-800">
-              <span className="text-sm font-medium text-green-700 dark:text-green-300">Balance:</span>
+              <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                Balance:
+              </span>
               <span className="text-sm font-bold text-green-800 dark:text-green-200">
                 {session.user.creditBalance || '0.00'} USDT
               </span>
             </div>
           )}
-          
+
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="secondary"
-                className="h-fit py-1.5 px-3"
-                asChild
-              >
+              <Button variant="secondary" className="h-fit py-1.5 px-3" asChild>
                 <Link href="/">Chat</Link>
               </Button>
             </TooltipTrigger>
@@ -87,11 +85,7 @@ function PurePageHeader({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="secondary"
-                className="h-fit py-1.5 px-3"
-                asChild
-              >
+              <Button variant="secondary" className="h-fit py-1.5 px-3" asChild>
                 <Link href="/marketplace">Marketplace</Link>
               </Button>
             </TooltipTrigger>
@@ -100,18 +94,14 @@ function PurePageHeader({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="secondary"
-                className="h-fit py-1.5 px-3"
-                asChild
-              >
-                <Link href={isGuest ? "/login" : "/profile"}>
-                  {isGuest ? "Login" : "Profile"}
+              <Button variant="secondary" className="h-fit py-1.5 px-3" asChild>
+                <Link href={isGuest ? '/login' : '/profile'}>
+                  {isGuest ? 'Login' : 'Profile'}
                 </Link>
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {isGuest ? "Login to your account" : "View Profile"}
+              {isGuest ? 'Login to your account' : 'View Profile'}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -120,4 +110,4 @@ function PurePageHeader({
   );
 }
 
-export const PageHeader = memo(PurePageHeader); 
+export const PageHeader = memo(PurePageHeader);

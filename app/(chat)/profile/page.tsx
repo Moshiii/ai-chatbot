@@ -2,7 +2,13 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { PageHeader } from '@/components/page-header';
@@ -12,13 +18,13 @@ import { useEffect } from 'react';
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
     }
   }, [status, router]);
-  
+
   if (status === 'loading') {
     return (
       <div className="container mx-auto py-8 px-4 max-w-2xl">
@@ -29,7 +35,7 @@ export default function ProfilePage() {
       </div>
     );
   }
-  
+
   if (!session?.user) {
     return null;
   }
@@ -59,7 +65,9 @@ export default function ProfilePage() {
               </div>
               <CardTitle className="text-xl">{user.email}</CardTitle>
               <CardDescription>
-                <Badge variant={user.type === 'guest' ? 'secondary' : 'default'}>
+                <Badge
+                  variant={user.type === 'guest' ? 'secondary' : 'default'}
+                >
                   {user.type === 'guest' ? 'Guest User' : 'GitHub User'}
                 </Badge>
               </CardDescription>
@@ -68,24 +76,35 @@ export default function ProfilePage() {
               <Separator />
               <div className="grid gap-4">
                 <div className="flex justify-between items-center">
-                  <span className="font-medium text-muted-foreground">Email:</span>
+                  <span className="font-medium text-muted-foreground">
+                    Email:
+                  </span>
                   <span>{user.email}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="font-medium text-muted-foreground">Account Type:</span>
+                  <span className="font-medium text-muted-foreground">
+                    Account Type:
+                  </span>
                   <Badge variant="outline">
                     {user.type === 'guest' ? 'Guest' : 'Regular'}
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="font-medium text-muted-foreground">Credit Balance:</span>
-                  <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                  <span className="font-medium text-muted-foreground">
+                    Credit Balance:
+                  </span>
+                  <Badge
+                    variant="default"
+                    className="bg-green-600 hover:bg-green-700"
+                  >
                     {user.creditBalance || '0.00'} USDT
                   </Badge>
                 </div>
                 {user.name && (
                   <div className="flex justify-between items-center">
-                    <span className="font-medium text-muted-foreground">Name:</span>
+                    <span className="font-medium text-muted-foreground">
+                      Name:
+                    </span>
                     <span>{user.name}</span>
                   </div>
                 )}
@@ -96,4 +115,4 @@ export default function ProfilePage() {
       </div>
     </>
   );
-} 
+}
