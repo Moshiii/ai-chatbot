@@ -2,13 +2,13 @@
 
 ### 1. Introduction & Goal
 
-This document outlines the requirements for refactoring the existing agent task management system to be fully compliant with the Agent-to-Agent (A2A) communication protocol. The primary goal is to centralize task-related tool logic within an external, A2A-compliant orchestrator agent, moving it out of the Next.js application. The Next.js backend will act as a thin client, relaying user messages to the agent and processing asynchronous updates via webhooks. This refactoring will replace the current `documents` table with a dedicated, A2A-compliant `tasks` table, providing a more robust, scalable, and standardized architecture.
+This document outlines the requirements for refactoring the existing agent task management system to be fully compliant with the Agent-to-Agent (A2A) communication protocol. The primary goal is to centralize task-related tool logic within an external, A2A-compliant orchestrator agent, moving it out of the Next.js application. The Next.js backend will act as a thin client, relaying user messages to the agent and processing asynchronous updates via webhooks. This refactoring introduces a dedicated `tasks` table and modifies the `documents` table to act as a "canvas" or container for those tasks, providing a more robust, scalable, and standardized architecture.
 
 ### 2. Codebase Analysis & Current Architecture
 
 #### 2.1. High-Level Flow
 
-A thorough review of the codebase reveals a well-established, stream-based architecture for agent communication. The agent is invoked via a `planTasks` -> `createTask` -> `updateTask` tool flow, with the frontend rendering progress and results in real-time.
+A thorough review of the codebase reveals a well-established, stream-based architecture for agent communication. The agent is invoked via a `planTasks` -> `createTask` -> `updateTask` tool flow, with the frontend rendering progress and results in real-time. This logic is currently embedded within the Next.js application's AI SDK implementation.
 
 #### 2.2. A2A Provider: The Bridge Component
 
@@ -16,25 +16,82 @@ The connection between the Vercel AI SDK and our Python agent is handled by a cu
 
 #### 2.3. Current Limitations
 
-The current system uses the generic `documents` table (with a `canvas` type) to store task information. This refactoring will replace that with a dedicated `tasks` table.
+The current system uses the generic `documents` table (with a `canvas` type) to store all task and job information directly. This refactoring will separate the concerns, using the `documents` table as a high-level container and introducing a dedicated `tasks` table for the operational details.
 
 ### 3. Proposed Refactoring & Architecture
 
 The core of this refactoring is a fundamental shift in architecture. We will move all task-related business logic from the Vercel AI SDK agent running in the Next.js application to an external Python agent that acts as the orchestrator. The Next.js application will no longer define `createTask` or `updateTask` tools; instead, it will use a custom AI SDK provider to communicate with the Python agent.
 
 The new architecture will be as follows:
-1.  **Message Relay:** The Next.js backend will relay user messages to the external Python orchestrator agent via the A2A protocol, using a custom AI SDK provider.
-2.  **External Orchestration:** The Python agent (initially a mock, as defined in `python-agent/`) will receive the message and perform all task-related actions. This includes the logic previously handled by the `createTask` and `updateTask` tools within the Next.js application.
-3.  **DB Updates via Webhook:** The Python agent will communicate task creation, progress, and completion back to the Next.js application by calling a secure webhook endpoint. The Next.js app will then update the new `tasks` table in its database.
-4.  **UI Rendering:** The frontend will render task status and results based on the data in the `tasks` table, with real-time updates triggered by the webhooks.
+1.  **Canvas & Message Relay:** When a user initiates a planning request, the Next.js backend creates a `document` of `kind: 'canvas'` to represent the overall plan. It then relays the user message and a reference to this canvas document to the external Python orchestrator agent.
+2.  **External Orchestration:** The Python agent (initially a mock, as defined in `python-agent/`) receives the message, decomposes the plan into one or more discrete tasks, and performs all related actions.
+3.  **DB Updates via Webhook:** The Python agent communicates task creation, progress, and completion back to the Next.js application by calling a secure webhook endpoint. These webhook calls include a reference to the parent canvas document. The Next.js backend then creates/updates records in the `tasks` table and links them to the `documents` table.
+4.  **UI Rendering:** The frontend renders the canvas and its associated tasks, with real-time updates triggered by the webhooks.
 
 ### 4. Database Schema Changes
 
-_(This section is unchanged and defines the new `tasks` table and the modification to the `messages` table.)_
+To support the new A2A task-centric architecture, we will introduce a new `tasks` table and modify the existing `documents` and `messages` tables. The `documents` table will continue to store "canvas" documents, which will act as containers referencing the tasks associated with them.
+
+#### 4.1. Task Status Enum
+We will define a reusable enum for task statuses that aligns with the A2A protocol specification.
+**File:** `lib/db/schema.ts`
+```typescript
+import { pgEnum, pgTable, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
+
+export const taskStatusEnum = pgEnum('task_status', [
+  'submitted',
+  'working',
+  'input-required',
+  'completed',
+  'canceled',
+  'failed',
+  'rejected',
+  'auth-required',
+  'unknown',
+]);
+```
+
+#### 4.2. New `tasks` Table
+A dedicated `tasks` table will be the system of record for all individual tasks generated by the orchestrator agent. It will store the status, results, and other metadata for each task.
+**File:** `lib/db/schema.ts`
+```typescript
+export const tasks = pgTable('tasks', {
+  id: text('id').primaryKey(), // Task ID from A2A Task.id
+  contextId: text('context_id').notNull(),
+  status: taskStatusEnum('status').notNull().default('submitted'),
+  statusMessage: text('status_message'),
+  result: jsonb('result'),
+  webhookToken: text('webhook_token').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+```
+
+#### 4.3. `documents` Table Modification
+The `documents` table will be modified to link a canvas document to its associated tasks. A new `jsonb` column will store an array of task IDs.
+**File:** `lib/db/schema.ts`
+```typescript
+// In the 'documents' table definition
+export const documents = pgTable('documents', {
+  // ... existing columns
+  taskIds: jsonb('task_ids').$type<string[]>(), // Array of task IDs
+});
+```
+
+#### 4.4. `messages` Table Modification
+To link chat messages to the artifacts they produce (like a task canvas), we will add a `jsonb` data column to the `messages` table.
+**File:** `lib/db/schema.ts`
+```typescript
+// In the 'messages' table definition
+export const messages = pgTable('messages', {
+  // ... existing columns
+  data: jsonb('data'), // To store { artifactType: 'document', documentId: '...' } or similar
+});
+```
 
 ### 5. Developer Experience & Local Testing
 
-_(This section is unchanged and describes the plan to enhance the Python mock agent to call a webhook upon task completion.)_
+To ensure a smooth developer experience, the Python mock agent will be runnable with a single command (`python -m task_agent`). This allows local end-to-end testing of the full flow: a user prompt in the Next.js UI triggers a call to the local Python agent, which then calls the webhook back to the Next.js application to update the database and UI.
 
 ### 6. Implementation Plan & Task Checklist
 
@@ -47,22 +104,21 @@ Here is the detailed, incremental plan for executing the refactor. Each phase an
 _The goal of this phase is to prepare the database and backend API to support the new task-centric architecture._
 
 - [ ] **Task 1.1: Update Database Schema (`lib/db/schema.ts`)**
-  - [ ] Add the `taskStatusEnum` export.
-  - [ ] Add the `tasks` table definition as specified in Section 4.1.
+  - [ ] Add the `taskStatusEnum` export as defined in Section 4.1.
+  - [ ] Add the `tasks` table definition as specified in Section 4.2.
+  - [ ] Add the `taskIds: jsonb('task_ids')` column to the `documents` table as specified in Section 4.3.
+  - [ ] Add the `data: jsonb('data')` column to the `messages` table as specified in Section 4.4.
 
-- [ ] **Task 1.2: Enhance Messages Table (`lib/db/schema.ts`)**
-  - [ ] Add the `data: jsonb('data')` column to the `messages` table definition.
-
-- [ ] **Task 1.3: Apply Database Migration**
+- [ ] **Task 1.2: Apply Database Migration**
   - [ ] Run `pnpm db:generate` to create the migration file.
   - [ ] Review the generated SQL in the new migration file for correctness.
   - [ ] Run `pnpm db:migrate` to apply the changes to the database.
 
-- [ ] **Task 1.4: Create Webhook API Route**
+- [ ] **Task 1.3: Create Webhook API Route**
   - [ ] Create a new file: `app/api/webhook/tasks/route.ts`.
-  - [ ] Implement a `POST` handler that receives a task update (e.g., `{ taskId, status, result }`).
+  - [ ] Implement a `POST` handler that receives task data (e.g., `{ taskId, documentId, status, result }`).
   - [ ] The handler must validate a secret token from the `Authorization: Bearer <token>` header.
-  - [ ] On successful validation, it should update the corresponding record in the `tasks` table.
+  - [ ] On successful validation, it should `upsert` a record in the `tasks` table and update the `taskIds` array in the corresponding `documents` table record.
 
 ---
 
@@ -81,13 +137,13 @@ _The goal of this phase is to remove the task-related tool logic from the Next.j
 
 - [ ] **Task 2.3: Update Chat API to Use the Custom Provider**
   - [ ] Modify `app/(chat)/api/chat/route.ts` to use the new A2A custom provider when the "Python Agent (A2A)" model is selected.
-  - [ ] The route should expect an ACK from the agent and use the information to create an initial entry in the `tasks` table, as described in Section 10.3.
+  - [ ] When a planning request is received, the route should first create a `document` of `kind: 'canvas'`, then pass the `documentId` in the context of the message to the Python agent.
 
 ---
 
 #### **Phase 3: Refactor Frontend & API**
 
-_The goal of this phase is to adapt the frontend components to display data from the new `tasks` table._
+_The goal of this phase is to adapt the frontend components to display data from the new `documents` and `tasks` tables._
 
 - [ ] **Task 3.1: Create Task-Fetching API Route**
   - [ ] Create a new file: `app/api/tasks/[id]/route.ts`.
@@ -95,13 +151,15 @@ _The goal of this phase is to adapt the frontend components to display data from
   - [ ] The handler should query the `tasks` table and return the corresponding task object.
 
 - [ ] **Task 3.2: Refactor Canvas Artifact (`components/artifact.tsx`)**
-  - [ ] Locate the `useSWR` hook that currently fetches `/api/document`.
-  - [ ] Add a condition: if `artifact.kind === 'canvas'` (or a new kind like `'task'`), it should instead call the new `/api/tasks/[id]` endpoint.
-  - [ ] Ensure the component correctly handles the new A2A Task object structure.
+  - [ ] The component will be triggered by a message containing a reference to a `document` of `kind: 'canvas'`.
+  - [ ] It should first fetch the canvas document from `/api/documents/[id]`.
+  - [ ] From the document, it will get the `taskIds` array.
+  - [ ] It will then fetch the data for each task ID (e.g., by calling `/api/tasks/[id]` for each, or a new bulk-fetch endpoint).
+  - [ ] The component will then render the UI that showcases all the fetched tasks, updating as webhook events are received.
 
 - [ ] **Task 3.3: Update Message Component (`components/message.tsx`)**
-  - [ ] In the component that renders message parts, add a condition to check for `part.type === 'tool-createTask'` or `message.data.artifactType === 'task'`.
-  - [ ] When this condition is met, render a specific preview component for the task artifact, which should link to or open the main `Artifact` view.
+  - [ ] In the component that renders message parts, add a condition to check for a message that references a `document` of `kind: 'canvas'` (e.g., via `message.data.documentId`).
+  - [ ] When this condition is met, render a preview component for the canvas artifact, which should link to or open the main `Artifact` view for that document.
 
 ---
 
@@ -114,22 +172,15 @@ _The goal of this phase is to implement the core orchestration logic within the 
   - [ ] Implement the `_call_webhook` method to send updates back to the Next.js application's `/api/webhook/tasks` endpoint, as specified in Section 22.
 
 - [ ] **Task 4.2: Implement Task Creation Logic in Python**
-  - [ ] When a user prompt requires task creation, the agent should generate the task and job structure internally.
-  - [ ] After generating the task details, it must call the webhook with the new task's data (ID, title, status: 'submitted', etc.) so the Next.js backend can create a corresponding record in the `tasks` table.
+  - [ ] The agent's `execute` method will receive a `documentId` in the request context from the Next.js app.
+  - [ ] When a user prompt requires task creation, the agent should generate the structure for one or more tasks.
+  - [ ] For each task generated, it must call the webhook (`/api/webhook/tasks`). The payload must include the task details (ID, title, etc.) and the `documentId` it belongs to.
+  - [ ] The webhook in the Next.js app is responsible for creating the task record and updating the `documents` table to link them.
 
 - [ ] **Task 4.3: Implement Task Execution Logic in Python**
   - [ ] When a task execution is triggered, the agent should simulate the job execution process (e.g., iterating through jobs, simulating work with `asyncio.sleep`).
   - [ ] For each significant step of the execution (e.g., job starting, job completed), the agent must call the webhook to update the task's status and results in the Next.js application's database.
   - [ ] The final execution summary should also be sent via a webhook call.
-
-- [ ] **Task 4.4: Write End-to-End Tests**
-  - [ ] Using Playwright, create a new test file for the A2A flow.
-  - [ ] The test should simulate the full user journey:
-    1. Sending a prompt that triggers task planning.
-    2. Verifying that the task artifact appears in the chat.
-    3. Opening the artifact and triggering execution.
-    4. Verifying that the UI updates based on the streamed data from the mock agent.
-    5. Verifying that the final webhook call is received by the backend (this may require mocking the webhook endpoint in the test environment).
 
 ---
 
@@ -234,6 +285,7 @@ Behavior:
 ```json
 {
   "id": "<task-id>",
+  "documentId": "<parent-document-id>",
   "contextId": "<context-id>",
   "kind": "task",
   "status": { "state": "completed", "timestamp": "2024-03-15T18:30:00Z" },
@@ -292,7 +344,8 @@ RLS (if enabled):
 - Steps:
   - Parse JSON body, validate shape against A2A `Task` subset (id, contextId, status, artifacts?)
   - Verify token matches a stored `webhookToken` for the task
-  - Idempotent upsert: update `status`, `statusMessage`, `result`, `updatedAt`
+  - Idempotent upsert: update `status`, `statusMessage`, `result`, `updatedAt` in the `tasks` table.
+  - Concurrently, update the `documents` table to add the `taskId` to the `taskIds` array for the given `documentId`.
   - Return `204 No Content`
   - On invalid token: `401 Unauthorized`
   - On validation error: `400 Bad Request`
@@ -305,68 +358,67 @@ RLS (if enabled):
 
 #### 10.3. Chat Route Behavior (Server)
 
-- When `model` is `a2a(...)`, ensure we call the A2A client with:
-  - `message/send` (non-streaming)
-  - `configuration.blocking = false`
-  - `configuration.pushNotificationConfig = { url, token }`
-- Persist the ACK as a `tasks` row and emit a UI message part with `data: { artifactType: 'task', taskId }` so the frontend can render a Task artifact immediately.
+- When `model` is `a2a(...)`, the chat route should:
+  1. Create a new `document` of `kind: 'canvas'` to get a `documentId`.
+  2. Append a `message` to the chat history with `data: { artifactType: 'document', documentId }` so the UI can render the canvas artifact placeholder.
+  3. Call the A2A client with the user's prompt, including the `documentId` in the context, `blocking=false`, and `pushNotificationConfig`.
 
 ---
 
 ### 11. Frontend/UI Requirements
 
 - `components/artifact.tsx` (Canvas):
-  - If `artifact.kind === 'task'` (or use new kind), fetch from `/api/tasks/[id]`
-  - Show current status badge; read-only details until execution completes
-  - Provide an "Execute" or "Start" control if applicable to trigger downstream remote execution (depends on orchestrator design)
+  - If `artifact.kind === 'canvas'`, fetch from `/api/documents/[id]`.
+  - Use the `taskIds` from the document to fetch all associated tasks from `/api/tasks/[id]` (or a bulk endpoint).
+  - Show current status for each task; update on webhook-triggered revalidation.
 
 - `components/message.tsx`:
-  - If `message.data.artifactType === 'task'`, render a compact task preview linking to the full artifact view
+  - If `message.data.artifactType === 'document'`, render a compact canvas preview linking to the full artifact view.
 
 - Revalidation:
-  - On webhook, invalidate task caches (SWR mutate or route revalidation) so the UI updates without reload
+  - On webhook, invalidate task and document caches (SWR mutate or route revalidation) so the UI updates without reload.
 
 ---
 
 ### 12. Provider/Client Changes (Code Alignment)
 
 - `lib/ai/a2a-chat-language-model.ts`:
-  - For ACK-only flow, the `sendMessage` call must use `configuration.blocking = false` and include `pushNotificationConfig`
-  - Avoid streaming for long tasks; `doStream` may be used only for short, planning-oriented interactions if needed. Default path for orchestration is non-streaming ACK + webhook
-  - Persist ACK result to DB (via caller) and return a UI-compatible content part indicating task created
+  - For ACK-only flow, the `sendMessage` call must use `configuration.blocking = false` and include `pushNotificationConfig`.
+  - Avoid streaming for long tasks; `doStream` may be used only for short, planning-oriented interactions if needed. Default path for orchestration is non-streaming ACK + webhook.
 
 - `lib/ai/a2a-provider.ts`:
-  - Support settings for `pushNotificationUrl` and inject per-call token
-  - Expose `taskMode: true` to ensure the model uses the ACK + webhook path
+  - Support settings for `pushNotificationUrl` and inject per-call token.
+  - Expose `taskMode: true` to ensure the model uses the ACK + webhook path.
 
 ---
 
 ### 13. Security
 
-- Webhook tokens are per-task, random, and stored in `tasks.webhookToken`
-- Validate `Authorization: Bearer <token>` on webhook, reject mismatches
-- Ensure webhook `url` is HTTPS and publicly reachable
-- Optionally log and rate-limit webhook calls
-- Do not include PII in artifacts unless strictly necessary
+- Webhook tokens are per-task, random, and stored in `tasks.webhookToken`.
+- Validate `Authorization: Bearer <token>` on webhook, reject mismatches.
+- Ensure webhook `url` is HTTPS and publicly reachable.
+- Optionally log and rate-limit webhook calls.
+- Do not include PII in artifacts unless strictly necessary.
 
 ---
 
 ### 14. Observability & Failure Modes
 
-- Log initial ACK (task created) and webhook completion (task terminal state)
-- Retry policy for transient DB or network failures (A2A client already retries; document limits)
-- If webhook not received within SLA (e.g., 30 minutes), surface `unknown` or `failed` with a timeout reason and allow manual retry/cancel
+- Log initial canvas creation, agent ACK, and webhook completion (task terminal state).
+- Retry policy for transient DB or network failures.
+- If webhook not received within SLA (e.g., 30 minutes), surface `unknown` or `failed` with a timeout reason and allow manual retry/cancel.
 
 ---
 
 ### 15. Test Plan (Expanded)
 
-- Unit tests for webhook handler (authz, idempotency, happy path, invalid token)
-- Integration test for chat route creating a task (ACK stored, UI message part contains `{ artifactType: 'task', taskId }`)
+- Unit tests for webhook handler (authz, idempotency, happy path, invalid token, document linking).
+- Integration test for chat route creating a canvas document and calling the agent.
 - E2E (Playwright):
-  - Trigger a prompt that plans tasks
-  - Verify task artifact appears
-  - Simulate agent completion by POSTing webhook payload; verify UI updates and task state transitions to `completed`
+  - Trigger a prompt that plans tasks.
+  - Verify canvas artifact appears.
+  - Simulate agent completion by POSTing webhook payloads for multiple tasks.
+  - Verify UI updates and task states transition to `completed` within the canvas.
 
 ---
 
@@ -387,22 +439,33 @@ sequenceDiagram
   actor User
   participant UI as Next.js UI
   participant API as Chat API
+  participant DB as Postgres
   participant A2A as A2A Orchestrator
-  participant DB as Postgres (tasks)
-  participant WH as Webhook (/api/webhook/tasks)
+  participant WH as Webhook API
 
-  User->>UI: Prompt to generate plan/execute tasks
-  UI->>API: POST /api/chat (UIMessage → ModelMessage)
-  API->>A2A: JSON-RPC message/send (blocking=false, pushNotificationConfig)
-  A2A-->>API: ACK Task {state: submitted|working}
-  API->>DB: upsert tasks (status=submitted/working)
-  API-->>UI: UI message with data {artifactType: 'task', taskId}
-  UI->>DB: fetch /api/tasks/[id] for canvas view
+  User->>UI: Prompt to generate plan
+  UI->>API: POST /api/chat
+  API->>DB: INSERT INTO documents (kind='canvas')
+  DB-->>API: new documentId
+  API->>DB: INSERT INTO messages (data={documentId})
+  API-->>UI: Stream message with canvas placeholder
+  API->>A2A: JSON-RPC message/send (context includes documentId)
+  A2A-->>API: ACK {state: working}
 
-  A2A->>WH: POST completion webhook (Authorization: Bearer <token>)
-  WH->>DB: update task (status=completed|failed|canceled, result)
-  WH-->>UI: trigger revalidation/SWR mutate
-  UI->>DB: refetch task; render final result in canvas
+  loop For each task in plan
+    A2A->>WH: POST /api/webhook/tasks (task_1 data, documentId)
+    WH->>DB: UPSERT tasks table (task_1)
+    WH->>DB: UPDATE documents SET taskIds += task_1.id
+    WH-->>UI: Trigger revalidation
+    UI->>DB: Refetch document and tasks
+    UI-->>User: Show task_1 in canvas
+  end
+
+  A2A->>WH: POST /api/webhook/tasks (task_N final status)
+  WH->>DB: UPDATE tasks table (task_N)
+  WH-->>UI: Trigger revalidation
+  UI->>DB: Refetch task_N
+  UI-->>User: Show final task status
 ```
 
 ---
@@ -425,47 +488,43 @@ Non-goals:
 Goal: Use AI SDK v5-native message structures, while cleanly mapping A2A Task context.
 
 - **Message Types**: Persist conversation in `UIMessage[]` form and convert to `ModelMessage[]` at request time using `convertToModelMessages` [link](https://v5.ai-sdk.dev/docs/announcing-ai-sdk-5-beta).
-- **Parts**: Prefer `text`, `file`, and `data` parts for structured payloads. Tool progress/status events from A2A can be rendered as `data` parts in messages when needed.
 - **Context Mapping**:
-  - `chatId → contextId`: For any chat session, generate or reuse a stable `contextId` that is sent with A2A `Message.contextId`. Store mapping in DB (e.g., `chats.contextId`).
-  - A2A `Task.contextId` must match the `Message.contextId` so that tasks can be related back to the chat history.
-- **Referencing Tasks in Messages**:
-  - When a task is ACKed, append a UI message with a `data` part: `{ artifactType: 'task', taskId: '<id>' }`.
-  - Downstream UI components use this reference to fetch `/api/tasks/[id]`.
-- **Rationale**: This keeps the chat history canonical as `UIMessage[]` (AI SDK standard) while using `tasks` as the system of record for orchestration state.
+  - `chatId → contextId`: For any chat session, generate or reuse a stable `contextId`.
+  - The `documentId` for the canvas should be passed within the A2A message context so the agent can associate tasks with it.
+- **Referencing Artifacts in Messages**:
+  - When a canvas is created, append a UI message with a `data` part: `{ artifactType: 'document', documentId: '<id>' }`.
+  - Downstream UI components use this reference to fetch the document and its associated tasks.
 
 ---
 
-### 20. Data Model Linking: Messages ↔ Tasks
+### 20. Data Model Linking: Messages ↔ Documents ↔ Tasks
 
-- **Separate Concerns**: Keep `tasks` in a dedicated table aligned with A2A `Task`. Keep chat history in `messages` aligned with AI SDK `UIMessage`.
+- **Separate Concerns**: `documents` for the canvas container, `tasks` for operational data, `messages` for chat history.
 - **Links**:
-- `messages.data.taskId` optional field for messages that introduce or update a task.
-- `tasks.contextId` equals the chat session context id.
-- Optional `messages.contextId` column mirrors the chat context id for faster joins.
+- `messages.data.documentId` links a message to the canvas it created.
+- `documents.taskIds` (a `jsonb` array) links a canvas to all its tasks.
+- `tasks.contextId` links a task back to the overall chat session.
 - **Queries**:
-  - Fetch tasks by `contextId` to show task list in a chat.
-  - Fetch a single task by `id` for canvas rendering.
+  - Fetch a document by `id` to get the list of `taskIds`.
+  - Fetch all tasks where `id` is in the `taskIds` array to render the canvas.
 
 ---
 
 ### 21. Codebase Integration Touchpoints (Evaluation)
 
 - `app/(chat)/api/chat/route.ts`:
-  - Ensure we convert `UIMessage[]` → `ModelMessage[]` before calling the model [link](https://v5.ai-sdk.dev/docs/announcing-ai-sdk-5-beta).
-  - When `a2a(...)` model selected and `taskMode` enabled: send `message/send` with `blocking=false` and `pushNotificationConfig`.
-  - On ACK: persist `tasks` row and append a UI message with `{ artifactType: 'task', taskId }`.
+  - On a planning prompt, create the canvas `document`, then call the A2A model with the `documentId` in the context.
+  - Append a UI message with `{ artifactType: 'document', documentId }`.
 
 - `lib/ai/a2a-chat-language-model.ts`:
-  - Inject `pushNotificationConfig` (env-provided URL and per-request token) in non-stream path.
-  - Default to ACK + webhook flow for orchestrated tasks.
+  - Ensure the `documentId` is passed through to the Python agent.
 
 - `components/artifact.tsx` (Canvas) and related components:
-  - If `artifactType==='task'`, fetch `/api/tasks/[id]`. Render status, metadata, and artifacts; update on webhook-triggered revalidation.
+  - If `artifactType==='document'`, fetch `/api/documents/[id]`, then use `taskIds` to fetch all tasks. Render the complete canvas view.
 
 - DB & Queries (`lib/db/schema.ts`, `lib/db/queries.ts`):
-  - Ensure `tasks` schema supports A2A states and result JSON, plus `webhookToken`.
-  - Provide helpers to upsert ACK and finalize on webhook.
+  - Ensure schemas match Section 4.
+  - Provide helpers to create the canvas and to handle the webhook logic (upsert task + update document).
 
 ---
 
@@ -477,26 +536,24 @@ We will implement a minimal JSON-RPC A2A-compatible orchestrator inside `python-
 
 - `POST /jsonrpc` single endpoint handling:
   - `message/send`: return immediate `Task` ACK with `status.state='submitted'| 'working'`.
-  - Optionally accept `tasks/get` for local inspection.
 
 #### 22.2. Behavior
 
 - On `message/send` with `blocking=false` and `pushNotificationConfig`:
-  - Generate `task.id` and `contextId` from request.
+  - Extract `documentId` from the message context.
   - Return ACK immediately.
-  - Spawn async worker (thread/asyncio) to simulate execution and then POST final `Task` to client webhook with `Authorization: Bearer <token>`.
+  - Spawn async worker to simulate planning and execution.
+  - For each generated task, POST to the client webhook with the task data and the `documentId`.
 
 #### 22.3. Implementation Tasks (Python)
 
 - [ ] Add simple JSON-RPC server to `python-agent/task_agent/agent_executor.py`.
-- [ ] Parse `message/send`, read `configuration.pushNotificationConfig`.
-- [ ] Return immediate `Task` ACK with `submitted` or `working` state.
-- [ ] Simulate long-running work; accumulate a simple `artifact.parts=[{kind:'data', data:{result: '...'}}]`.
-- [ ] Implement `_call_webhook(url, token, task)` using `requests` (or `httpx`).
-- [ ] POST final `Task` with terminal state to webhook.
+- [ ] Parse `message/send`, read `configuration.pushNotificationConfig` and the `documentId` from the context.
+- [ ] Return immediate `Task` ACK.
+- [ ] Simulate long-running work; generate one or more tasks.
+- [ ] Implement `_call_webhook(url, token, task, documentId)` using `requests` (or `httpx`).
+- [ ] POST each final `Task` with its terminal state to the webhook.
 - [ ] Provide `make run` or `python -m task_agent` entry for local startup.
-
-References for orchestrator/worker patterns: [AI SDK Agents](https://v5.ai-sdk.dev/docs/foundations/agents).
 
 ---
 
@@ -504,13 +561,13 @@ References for orchestrator/worker patterns: [AI SDK Agents](https://v5.ai-sdk.d
 
 - Backend
   - [ ] Add `contextId` support for chats; persist mapping `chatId ↔ contextId`.
-  - [ ] Implement `app/api/webhook/tasks/route.ts` with token validation and idempotent updates.
+  - [ ] Implement `app/api/webhook/tasks/route.ts` with token validation and idempotent updates to both `tasks` and `documents` tables.
   - [ ] Implement `app/api/tasks/[id]/route.ts` to fetch tasks.
   - [ ] Generate and store per-task `webhookToken`.
 
 - Frontend
-  - [ ] Update message composer/handlers to include `{ artifactType: 'task', taskId }` data part on ACK.
-  - [ ] Update canvas to read from `/api/tasks/[id]` and show lifecycle.
+  - [ ] Update message composer/handlers to create the canvas document and include `{ artifactType: 'document', documentId }` data part.
+  - [ ] Update canvas to read from `/api/documents/[id]` and then fetch tasks.
   - [ ] SWR mutate or revalidation on webhook.
 
 ---
