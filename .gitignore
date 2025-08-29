@@ -17,6 +17,9 @@ build
 .DS_Store
 *.pem
 
+# TypeScript build info
+tsconfig.tsbuildinfo
+
 # debug
 npm-debug.log*
 yarn-debug.log*
