@@ -28,7 +28,8 @@ import { canvasArtifact } from '@/artifacts/canvas/client';
 import equal from 'fast-deep-equal';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import type { VisibilityType } from './visibility-selector';
-import type { Attachment, ChatMessage } from '@/lib/types';
+import type { Attachment } from '@/lib/types';
+import type { UIMessage } from 'ai';
 
 export const artifactDefinitions = [
   textArtifact,
@@ -73,15 +74,15 @@ function PureArtifact({
   chatId: string;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
-  status: UseChatHelpers<ChatMessage>['status'];
-  stop: UseChatHelpers<ChatMessage>['stop'];
+  status: UseChatHelpers<UIMessage>['status'];
+  stop: UseChatHelpers<UIMessage>['stop'];
   attachments: Attachment[];
   setAttachments: Dispatch<SetStateAction<Attachment[]>>;
-  messages: ChatMessage[];
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
+  messages: UIMessage[];
+  setMessages: UseChatHelpers<UIMessage>['setMessages'];
   votes: Array<Vote> | undefined;
-  sendMessage: UseChatHelpers<ChatMessage>['sendMessage'];
-  regenerate: UseChatHelpers<ChatMessage>['regenerate'];
+  sendMessage: UseChatHelpers<UIMessage>['sendMessage'];
+  regenerate: UseChatHelpers<UIMessage>['regenerate'];
   isReadonly: boolean;
   selectedVisibilityType: VisibilityType;
 }) {
@@ -114,9 +115,10 @@ function PureArtifact({
         setArtifact((currentArtifact) => ({
           ...currentArtifact,
           // Don't overwrite content for canvas - it uses metadata instead
-          content: currentArtifact.kind === 'canvas' 
-            ? currentArtifact.content 
-            : mostRecentDocument.content ?? '',
+          content:
+            currentArtifact.kind === 'canvas'
+              ? currentArtifact.content
+              : (mostRecentDocument.content ?? ''),
         }));
       }
     }

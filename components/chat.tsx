@@ -20,8 +20,9 @@ import { useSearchParams } from 'next/navigation';
 import { useChatVisibility } from '@/hooks/use-chat-visibility';
 import { useAutoResume } from '@/hooks/use-auto-resume';
 import { ChatSDKError } from '@/lib/errors';
-import type { Attachment, ChatMessage } from '@/lib/types';
+import type { Attachment } from '@/lib/types';
 import { useDataStream } from './data-stream-provider';
+import type { UIMessage } from 'ai';
 
 export function Chat({
   id,
@@ -33,7 +34,7 @@ export function Chat({
   autoResume,
 }: {
   id: string;
-  initialMessages: ChatMessage[];
+  initialMessages: UIMessage[];
   initialChatModel: string;
   initialVisibilityType: VisibilityType;
   isReadonly: boolean;
@@ -58,7 +59,7 @@ export function Chat({
     stop,
     regenerate,
     resumeStream,
-  } = useChat<ChatMessage>({
+  } = useChat<UIMessage>({
     id,
     messages: initialMessages,
     experimental_throttle: 100,
