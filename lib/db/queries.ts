@@ -67,7 +67,11 @@ export async function createUser(email: string, password: string) {
   const hashedPassword = generateHashedPassword(password);
 
   try {
-    return await db.insert(user).values({ email, password: hashedPassword });
+    return await db.insert(user).values({
+      email,
+      password: hashedPassword,
+      creditBalance: '0.00',
+    });
   } catch (error) {
     throw new ChatSDKError('bad_request:database', 'Failed to create user');
   }
@@ -78,11 +82,18 @@ export async function createGuestUser() {
   const password = generateHashedPassword(generateUUID());
 
   try {
-    return await db.insert(user).values({ email, password }).returning({
-      id: user.id,
-      email: user.email,
-      creditBalance: user.creditBalance,
-    });
+    return await db
+      .insert(user)
+      .values({
+        email,
+        password,
+        creditBalance: '0.00',
+      })
+      .returning({
+        id: user.id,
+        email: user.email,
+        creditBalance: user.creditBalance,
+      });
   } catch (error) {
     throw new ChatSDKError(
       'bad_request:database',
@@ -103,7 +114,7 @@ export async function saveChat({
   visibility: VisibilityType;
 }) {
   try {
-    return db.insert(chat).values({
+    return await db.insert(chat).values({
       id,
       createdAt: new Date(),
       userId,
@@ -275,13 +286,13 @@ export async function voteMessage({
     const [existingVote] = await db
       .select()
       .from(vote)
-      .where(and(eq(vote.messageId, messageId)));
+      .where(and(eq(vote.messageId, messageId), eq(vote.userId, userId)));
 
     if (existingVote) {
       return await db
         .update(vote)
         .set({ value: type })
-        .where(and(eq(vote.messageId, messageId), eq(vote.chatId, chatId)));
+        .where(and(eq(vote.messageId, messageId), eq(vote.userId, userId)));
     }
     return await db.insert(vote).values({
       chatId,
@@ -348,6 +359,7 @@ export async function saveDocument({
           content,
           userId,
           createdAt: new Date(),
+          taskIds: [],
         })
         .returning();
     }
@@ -507,7 +519,7 @@ export async function deleteMessagesByChatIdAfterTimestamp({
   }
 }
 
-export async function updateChatVisiblityById({
+export async function updateChatVisibilityById({
   chatId,
   visibility,
 }: {
