@@ -16,8 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { MessageEditor } from './message-editor';
 import { DocumentPreview } from './document-preview';
 import { MessageReasoning } from './message-reasoning';
-import type { UseChatHelpers } from '@ai-sdk/react';
-import type { ChatMessage } from '@/lib/types';
+
 import { useDataStream } from './data-stream-provider';
 
 // Type narrowing is handled by TypeScript's control flow analysis
@@ -34,18 +33,18 @@ const PurePreviewMessage = ({
   requiresScrollPadding,
 }: {
   chatId: string;
-  message: ChatMessage;
+  message: any; // Use any to avoid complex type constraints
   vote: Vote | undefined;
   isLoading: boolean;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  regenerate: UseChatHelpers<ChatMessage>['regenerate'];
+  setMessages: any;
+  regenerate: any;
   isReadonly: boolean;
   requiresScrollPadding: boolean;
 }) => {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
 
   const attachmentsFromMessage = message.parts.filter(
-    (part) => part.type === 'file',
+    (part: any) => part.type === 'file',
   );
 
   useDataStream();
@@ -86,7 +85,7 @@ const PurePreviewMessage = ({
                 data-testid={`message-attachments`}
                 className="flex flex-row justify-end gap-2"
               >
-                {attachmentsFromMessage.map((attachment) => (
+                {attachmentsFromMessage.map((attachment: any) => (
                   <PreviewAttachment
                     key={attachment.url}
                     attachment={{
@@ -99,7 +98,7 @@ const PurePreviewMessage = ({
               </div>
             )}
 
-            {message.parts?.map((part, index) => {
+            {message.parts?.map((part: any, index: number) => {
               const { type } = part;
               const key = `message-${message.id}-part-${index}`;
 
@@ -170,7 +169,10 @@ const PurePreviewMessage = ({
 
                 if (state === 'input-available') {
                   return (
-                    <div key={`weather-input-${toolCallId}`} className="skeleton">
+                    <div
+                      key={`weather-input-${toolCallId}`}
+                      className="skeleton"
+                    >
                       <Weather />
                     </div>
                   );
@@ -214,43 +216,6 @@ const PurePreviewMessage = ({
 
                   return (
                     <div key={`create-doc-output-${toolCallId}`}>
-                      <DocumentPreview
-                        isReadonly={isReadonly}
-                        result={output}
-                      />
-                    </div>
-                  );
-                }
-              }
-
-              if (type === 'tool-createTask') {
-                const { toolCallId, state } = part;
-
-                if (state === 'input-available') {
-                  const { input } = part;
-                  return (
-                    <div key={`create-task-input-${toolCallId}`}>
-                      <DocumentPreview isReadonly={isReadonly} args={input} />
-                    </div>
-                  );
-                }
-
-                if (state === 'output-available') {
-                  const { output } = part;
-
-                  if ('error' in output) {
-                    return (
-                      <div
-                        key={`create-task-error-${toolCallId}`}
-                        className="text-red-500 p-2 border rounded"
-                      >
-                        Error: {String(output.error)}
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div key={`create-task-output-${toolCallId}`}>
                       <DocumentPreview
                         isReadonly={isReadonly}
                         result={output}
@@ -345,6 +310,35 @@ const PurePreviewMessage = ({
                 }
               }
             })}
+
+            {/* Canvas preview for messages that reference canvas documents */}
+            {(() => {
+              const canvasPart = message.parts.find(
+                (
+                  part: any,
+                ): part is {
+                  type: 'data-canvasReference';
+                  data: { artifactType: 'document'; documentId: string };
+                } => part.type === 'data-canvasReference',
+              );
+              return canvasPart ? (
+                <div className="mt-4 p-4 border rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="size-4 bg-blue-500 rounded" />
+                    <span className="text-sm font-medium">
+                      Task Planning Canvas
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    A canvas has been created to organize and track your tasks.
+                    The agent will populate it with tasks and execution results.
+                  </p>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Document ID: {canvasPart.data.documentId}
+                  </div>
+                </div>
+              ) : null;
+            })()}
 
             {!isReadonly && (
               <MessageActions

@@ -68,7 +68,7 @@ export function PureMessageActions({
             <Button
               data-testid="message-upvote"
               className="py-1 px-2 h-fit text-muted-foreground !pointer-events-auto"
-              disabled={vote?.isUpvoted}
+              disabled={vote?.value === 'up'}
               variant="outline"
               onClick={async () => {
                 const upvote = fetch('/api/vote', {
@@ -95,9 +95,12 @@ export function PureMessageActions({
                         return [
                           ...votesWithoutCurrent,
                           {
+                            id: crypto.randomUUID(),
                             chatId,
                             messageId: message.id,
-                            isUpvoted: true,
+                            userId: '', // This would need to be populated from session
+                            value: 'up',
+                            createdAt: new Date(),
                           },
                         ];
                       },
@@ -122,7 +125,7 @@ export function PureMessageActions({
               data-testid="message-downvote"
               className="py-1 px-2 h-fit text-muted-foreground !pointer-events-auto"
               variant="outline"
-              disabled={vote && !vote.isUpvoted}
+              disabled={vote?.value === 'down'}
               onClick={async () => {
                 const downvote = fetch('/api/vote', {
                   method: 'PATCH',
@@ -148,9 +151,12 @@ export function PureMessageActions({
                         return [
                           ...votesWithoutCurrent,
                           {
+                            id: crypto.randomUUID(),
                             chatId,
                             messageId: message.id,
-                            isUpvoted: false,
+                            userId: '', // This would need to be populated from session
+                            value: 'down',
+                            createdAt: new Date(),
                           },
                         ];
                       },
