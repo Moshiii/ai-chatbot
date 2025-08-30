@@ -24,15 +24,14 @@ class TaskAgentExecutor(AgentExecutor):
         self.webhook_base_url = "http://localhost:3000"  # Default Next.js URL
     
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
-        """Execute using A2A ACK + webhook pattern"""
+        """Execute as stateless task generator - return tasks in single response"""
 
-        print(f"[TaskAgent] Starting execution - Task: {context.task_id}")
+        print(f"[TaskAgent] Starting stateless task generation - Task: {context.task_id}")
 
         try:
-            # Extract user message and document ID
+            # Extract user message
             user_message = self._extract_user_message(context)
-            document_id = self._extract_document_id(context)
-            print(f"[TaskAgent] Processing: '{user_message}' (Document: {document_id})")
+            print(f"[TaskAgent] Processing: '{user_message}'")
 
             # Send initial ACK via event queue (immediate response)
             await event_queue.enqueue_event(TaskStatusUpdateEvent(
@@ -42,9 +41,15 @@ class TaskAgentExecutor(AgentExecutor):
                 final=False
             ))
 
-            # Start asynchronous processing (don't await - let it run in background)
-            asyncio.create_task(self._process_request_async(
-                context, user_message, document_id
+            # Generate tasks based on user message and return in single response
+            await self._generate_tasks_response(context, user_message, event_queue)
+
+            # Send final completion
+            await event_queue.enqueue_event(TaskStatusUpdateEvent(
+                taskId=context.task_id,
+                contextId=context.context_id,
+                status={"state": "completed", "message": "Task generation completed"},
+                final=True
             ))
 
         except Exception as e:
@@ -55,6 +60,57 @@ class TaskAgentExecutor(AgentExecutor):
                 status={"state": "failed", "message": str(e)},
                 final=True
             ))
+
+    async def _generate_tasks_response(self, context: RequestContext, user_message: str,
+                                     event_queue: EventQueue) -> None:
+        """Generate tasks and return them in a single A2A message response"""
+        print(f"[TaskAgent] Generating tasks for: '{user_message}'")
+
+        try:
+            # Generate sample jobs based on user message
+            jobs = self._generate_jobs(user_message)
+
+            # Create text part for human-readable confirmation
+            text_part = Part(
+                kind="text",
+                text=f"I've analyzed your request and created {len(jobs)} tasks for execution."
+            )
+
+            # Create data parts for each task
+            data_parts = []
+            for job in jobs:
+                task_data = {
+                    "type": "task",
+                    "id": job.get("id", str(uuid.uuid4())),
+                    "title": job.get("title", "Unnamed Task"),
+                    "description": job.get("description", ""),
+                    "status": "submitted",
+                    "assignedAgent": job.get("assignedAgent")
+                }
+                data_parts.append(Part(
+                    kind="data",
+                    data=task_data
+                ))
+
+            # Combine all parts into single message
+            all_parts = [text_part] + data_parts
+
+            # Create and enqueue the response message
+            from a2a.server.events import MessageEvent
+            response_message = new_agent_text_message(
+                f"Created {len(jobs)} tasks successfully. The frontend will now create a canvas to track their progress."
+            )
+
+            # Replace the message parts with our structured data
+            response_message.parts = all_parts
+
+            await event_queue.enqueue_event(response_message)
+
+            print(f"[TaskAgent] Successfully generated {len(jobs)} tasks in single response")
+
+        except Exception as e:
+            print(f"[TaskAgent] Error generating tasks: {e}")
+            raise
 
     async def _process_request_async(self, context: RequestContext, user_message: str,
                                    document_id: Optional[str]) -> None:
@@ -267,7 +323,7 @@ class TaskAgentExecutor(AgentExecutor):
 
     def _call_webhook(self, url: str, token: str, task_data: Dict[str, Any],
                      document_id: Optional[str] = None) -> bool:
-        """Send webhook notification to Next.js application"""
+        """Send webhook notification to Next.js application using session token"""
         try:
             payload = {
                 "id": task_data["id"],
@@ -285,6 +341,7 @@ class TaskAgentExecutor(AgentExecutor):
                 "Content-Type": "application/json"
             }
 
+            print(f"[Webhook] Sending notification for task {task_data['id']} to {url}")
             response = requests.post(url, json=payload, headers=headers, timeout=10)
 
             if response.status_code == 204:
