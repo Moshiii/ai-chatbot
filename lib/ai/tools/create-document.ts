@@ -1,12 +1,11 @@
 import { tool } from 'ai';
-import type { UIMessageStreamWriter } from 'ai';
+import type { UIMessageStreamWriter, UIMessage } from 'ai';
 import { z } from 'zod';
 import type { Session } from 'next-auth';
 import {
   artifactKinds,
   documentHandlersByArtifactKind,
 } from '@/lib/artifacts/server';
-import type { UIMessage } from 'ai';
 import { generateDocumentIds } from '@/lib/id-management';
 
 interface CreateDocumentProps {

@@ -78,7 +78,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                   className="cursor-pointer"
                   onSelect={() => router.push('/profile')}
                 >
-                  <UserIcon className="mr-2 h-4 w-4" />
+                  <UserIcon className="mr-2 size-4" />
                   View Profile
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -87,7 +87,9 @@ export function SidebarUserNav({ user }: { user: User }) {
             <DropdownMenuItem
               data-testid="user-nav-item-theme"
               className="cursor-pointer"
-              onSelect={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+              onSelect={() =>
+                setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
+              }
             >
               {`Toggle ${resolvedTheme === 'light' ? 'dark' : 'light'} mode`}
             </DropdownMenuItem>
