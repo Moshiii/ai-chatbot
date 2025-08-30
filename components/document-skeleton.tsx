@@ -15,15 +15,15 @@ export const DocumentSkeleton = ({
 }) => {
   if (artifactKind === ARTIFACT_TYPES.IMAGE) {
     return (
-      <div className="flex flex-col gap-4 w-full justify-center items-center h-[calc(100dvh-60px)]">
+      <div className="flex flex-col gap-4 size-full justify-center items-center">
         <div className="animate-pulse rounded-lg bg-muted-foreground/20 size-96" />
       </div>
     );
   }
-  
+
   if (artifactKind === ARTIFACT_TYPES.CANVAS) {
     return (
-      <div className="flex flex-col gap-4 w-full h-full">
+      <div className="flex flex-col gap-4 size-full">
         <div className="animate-pulse rounded-lg h-8 bg-muted-foreground/20 w-1/3" />
         <div className="flex gap-4 h-full">
           {/* Task List */}
@@ -38,7 +38,7 @@ export const DocumentSkeleton = ({
       </div>
     );
   }
-  
+
   return (
     <div className="flex flex-col gap-4 w-full">
       <div className="animate-pulse rounded-lg h-12 bg-muted-foreground/20 w-1/2" />
