@@ -87,17 +87,24 @@ export function Chat({
       setDataStream((ds) => (ds ? [...ds, dataPart] : []));
 
       // Handle task data collection for A2A canvas creation
+      // Check if this data part has tool-related properties (from A2A provider)
+      const toolDataPart = dataPart as any;
       if (
-        dataPart?.type === 'tool-result' &&
-        dataPart.toolName === 'task-generation' &&
-        dataPart.result
+        toolDataPart?.toolName === 'task-generation' &&
+        toolDataPart?.result &&
+        toolDataPart?.type === 'tool-result'
       ) {
-        console.log('[Chat] Received task generation result:', dataPart.result);
+        console.log(
+          '[Chat] Received task generation result:',
+          toolDataPart.result,
+        );
         setCollectedTasks((prev) => {
           // Check if we already have this task to avoid duplicates
-          const exists = prev.some((task) => task.id === dataPart.result.id);
+          const exists = prev.some(
+            (task) => task.id === toolDataPart.result.id,
+          );
           if (!exists) {
-            return [...prev, dataPart.result];
+            return [...prev, toolDataPart.result];
           }
           return prev;
         });
