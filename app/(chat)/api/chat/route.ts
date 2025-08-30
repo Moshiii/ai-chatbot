@@ -16,10 +16,9 @@ import {
   getMessagesByChatId,
   saveChat,
   saveMessages,
-  saveDocument,
 } from '@/lib/db/queries';
 import { convertToUIMessages, generateUUID } from '@/lib/utils';
-import { generateChatIds, generateDocumentIds } from '@/lib/id-management';
+import { generateChatIds } from '@/lib/id-management';
 import { generateTitleFromUserMessage } from '../../actions';
 import { createDocument } from '@/lib/ai/tools/create-document';
 import { updateDocument } from '@/lib/ai/tools/update-document';
@@ -154,53 +153,13 @@ export async function POST(request: Request) {
       ],
     });
 
-    // Handle A2A model - create canvas document and configure webhook
-    let canvasDocumentId: string | null = null;
+    // Handle A2A model - generate webhook token for session
     let webhookToken: string | null = null;
 
     if (selectedChatModel === 'a2a-model') {
-      // Generate IDs for canvas document
-      const documentIds = generateDocumentIds('Task Planning Canvas', 'canvas');
-      canvasDocumentId = documentIds.document.databaseId;
-
-      // Generate webhook token for A2A notifications
+      // Generate webhook token for this session
       webhookToken = generateUUID();
-
-      // Create canvas document
-      if (!canvasDocumentId) {
-        throw new Error('Failed to generate canvas document ID');
-      }
-
-      await saveDocument({
-        id: canvasDocumentId,
-        title: 'Task Planning Canvas',
-        kind: 'canvas',
-        content: 'Planning tasks...',
-        userId: session.user.id,
-      });
-
-      // Store canvas reference in user message
-      await saveMessages({
-        messages: [
-          {
-            chatId: id,
-            id: message.id,
-            role: 'user',
-            parts: [
-              ...message.parts,
-              {
-                type: 'data-canvasReference',
-                data: {
-                  artifactType: 'document',
-                  documentId: canvasDocumentId,
-                },
-              },
-            ],
-            attachments: [],
-            createdAt: new Date(),
-          },
-        ],
-      });
+      console.log('[Chat API] Generated webhook token for A2A session');
     }
 
     const chatIds = generateChatIds();
@@ -222,14 +181,13 @@ export async function POST(request: Request) {
         chatId: id,
         contextId: id, // Use chatId as contextId
         taskMode: true,
+        // Include webhook configuration for agent to use later
         pushNotificationConfig: webhookToken
           ? {
               url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/webhook/tasks`,
               token: webhookToken,
             }
           : undefined,
-        // Include canvas document ID in settings for the agent to use
-        documentId: canvasDocumentId || undefined,
       });
     } else {
       modelProvider = myProvider.languageModel(selectedChatModel);
