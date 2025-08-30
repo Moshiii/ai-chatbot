@@ -483,6 +483,25 @@ class StreamProcessor {
     controller: ReadableStreamDefaultController<LanguageModelV2StreamPart>,
   ): void {
     for (const part of parts) {
+      // Handle task data parts from A2A agent
+      if (
+        part.kind === 'data' &&
+        'data' in part &&
+        part.data &&
+        typeof part.data === 'object' &&
+        'type' in part.data &&
+        part.data.type === 'task'
+      ) {
+        console.log('[A2A] Processing task data part:', part.data);
+        controller.enqueue({
+          type: 'tool-result',
+          toolCallId: generateId(),
+          toolName: 'task-generation',
+          result: part.data,
+        });
+      }
+
+      // Handle toolcall data parts
       if (
         part.kind === 'data' &&
         'data' in part &&
