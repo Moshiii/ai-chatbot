@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { MessageEditor } from './message-editor';
 import { DocumentPreview } from './document-preview';
 import { MessageReasoning } from './message-reasoning';
+import { TaskCollector } from './task-collector';
 
 import { useDataStream } from './data-stream-provider';
 
@@ -337,6 +338,43 @@ const PurePreviewMessage = ({
                     Document ID: {canvasPart.data.documentId}
                   </div>
                 </div>
+              ) : null;
+            })()}
+
+            {/* Handle data-task parts for A2A task collection */}
+            {(() => {
+              const taskParts = message.parts.filter(
+                (part: any) => part.type === 'data-task' && part.data?.task,
+              );
+              return taskParts.length > 0 ? (
+                <TaskCollector
+                  taskParts={taskParts}
+                  chatId={chatId}
+                  onCanvasCreated={(canvas) => {
+                    // Update the message to include canvas reference
+                    setMessages((prevMessages: any[]) =>
+                      prevMessages.map((msg) =>
+                        msg.id === message.id
+                          ? {
+                              ...msg,
+                              parts: [
+                                ...msg.parts,
+                                {
+                                  type: 'data-canvasReference',
+                                  data: {
+                                    artifactType: 'document',
+                                    documentId: canvas.id,
+                                    taskIds: canvas.taskIds,
+                                    webhookToken: canvas.webhookToken,
+                                  },
+                                },
+                              ],
+                            }
+                          : msg,
+                      ),
+                    );
+                  }}
+                />
               ) : null;
             })()}
 

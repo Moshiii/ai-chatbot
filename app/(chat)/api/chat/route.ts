@@ -170,12 +170,8 @@ export async function POST(request: Request) {
     let modelProvider: any;
     if (selectedChatModel === 'a2a-model') {
       // Configure A2A provider with webhook settings
-      const a2aAgentUrl = process.env.A2A_AGENT_URL;
-      if (!a2aAgentUrl) {
-        throw new Error(
-          'A2A_AGENT_URL environment variable is required for A2A model',
-        );
-      }
+      const a2aAgentUrl = process.env.A2A_AGENT_URL || 'http://localhost:9999';
+      console.log('[Chat API] Using A2A agent URL:', a2aAgentUrl);
 
       modelProvider = a2a(a2aAgentUrl, {
         chatId: id,
@@ -189,6 +185,8 @@ export async function POST(request: Request) {
             }
           : undefined,
       });
+
+      console.log('[Chat API] A2A model selected - client tools disabled');
     } else {
       modelProvider = myProvider.languageModel(selectedChatModel);
     }
@@ -201,7 +199,8 @@ export async function POST(request: Request) {
           messages: convertToModelMessages(uiMessages),
           stopWhen: stepCountIs(5),
           experimental_activeTools:
-            selectedChatModel === 'chat-model-reasoning'
+            selectedChatModel === 'chat-model-reasoning' ||
+            selectedChatModel === 'a2a-model'
               ? []
               : [
                   'getWeather',
@@ -210,15 +209,18 @@ export async function POST(request: Request) {
                   'requestSuggestions',
                 ],
           experimental_transform: smoothStream({ chunking: 'word' }),
-          tools: {
-            getWeather,
-            createDocument: createDocument({ session, dataStream }),
-            updateDocument: updateDocument({ session, dataStream }),
-            requestSuggestions: requestSuggestions({
-              session,
-              dataStream,
-            }),
-          },
+          tools:
+            selectedChatModel === 'a2a-model'
+              ? {} // Disable all client-side tools for A2A - external agent handles everything
+              : {
+                  getWeather,
+                  createDocument: createDocument({ session, dataStream }),
+                  updateDocument: updateDocument({ session, dataStream }),
+                  requestSuggestions: requestSuggestions({
+                    session,
+                    dataStream,
+                  }),
+                },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
             functionId: 'stream-text',

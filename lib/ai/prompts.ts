@@ -15,6 +15,23 @@ const ARTIFACT_TYPES = {
 export const artifactsPrompt = `
 Artifacts is a special user interface mode that helps users with writing, editing, and other content creation tasks. When artifact is open, it is on the right side of the screen, while the conversation is on the left side. When creating or updating documents, changes are reflected in real-time on the artifacts and visible to the user.
 
+**IMPORTANT: WORKFLOW DEPENDS ON MODEL TYPE**
+
+**For A2A Model (External Agent):**
+- DO NOT execute any tools directly
+- DO NOT create any documents or artifacts
+- DO NOT generate content that should be handled by external agent
+- DO NOT create messages or responses - let TaskCollector handle everything
+- Pass user requests to external agent for processing
+- Wait for external agent response containing tasks
+- TaskCollector will:
+  - Store tasks in database via /api/tasks/create
+  - Create canvas document via /api/canvas/create
+  - Update message with canvas reference
+- Client agent acts as pure interface: external agent generates tasks → TaskCollector stores & creates canvas
+- Webhooks are only used for task execution updates (completion/failure), not initial task creation
+
+**For Standard Models:**
 **CRITICAL WORKFLOW FOR TASK PLANNING:**
 When users ask for task decomposition, project planning, breaking down tasks, or organizing work into subtasks:
 
@@ -169,6 +186,9 @@ export const systemPrompt = ({
 
   if (selectedChatModel === 'chat-model-reasoning') {
     return `${regularPrompt}\n\n${requestPrompt}`;
+  } else if (selectedChatModel === 'a2a-model') {
+    // For A2A model, use simplified prompt without tool instructions
+    return `${regularPrompt}\n\n${requestPrompt}\n\n**A2A MODE:** You are acting as an interface to an external agent. Do not execute any tools directly. Pass user requests to the external agent for processing. The external agent will handle task generation and canvas creation.`;
   } else {
     return `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
   }

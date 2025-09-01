@@ -3,6 +3,12 @@ import { eq } from 'drizzle-orm';
 import { db, updateTask, updateDocumentTaskIds } from '@/lib/db/queries';
 import { task, document } from '@/lib/db/schema';
 
+/**
+ * Task Execution Webhook
+ * Handles task execution updates (completion/failure) from external agent
+ * Note: Initial task creation is handled via direct response, not webhooks
+ */
+
 export async function POST(request: NextRequest) {
   try {
     // Extract and validate Authorization header
@@ -16,14 +22,16 @@ export async function POST(request: NextRequest) {
 
     const providedToken = authHeader.substring(7);
 
+    console.log('[Webhook] Received task execution update');
+
     // Parse request body
     const body = await request.json();
 
     // Validate required fields
     const { id: taskId, documentId, contextId, status, artifacts } = body;
-    if (!taskId || !documentId || !contextId || !status) {
+    if (!taskId || !contextId || !status) {
       return NextResponse.json(
-        { error: 'Missing required fields: id, documentId, contextId, status' },
+        { error: 'Missing required fields: id, contextId, status' },
         { status: 400 },
       );
     }
@@ -96,21 +104,23 @@ export async function POST(request: NextRequest) {
       result,
     });
 
-    // Update the document's taskIds array if needed
-    const documentData = await db
-      .select()
-      .from(document)
-      .where(eq(document.id, documentId))
-      .limit(1);
+    // Update the document's taskIds array if documentId is provided
+    if (documentId) {
+      const documentData = await db
+        .select()
+        .from(document)
+        .where(eq(document.id, documentId))
+        .limit(1);
 
-    if (documentData.length > 0) {
-      const currentTaskIds = documentData[0].taskIds || [];
-      if (!currentTaskIds.includes(taskId)) {
-        const updatedTaskIds = [...currentTaskIds, taskId];
-        await updateDocumentTaskIds({
-          documentId,
-          taskIds: updatedTaskIds,
-        });
+      if (documentData.length > 0) {
+        const currentTaskIds = documentData[0].taskIds || [];
+        if (!currentTaskIds.includes(taskId)) {
+          const updatedTaskIds = [...currentTaskIds, taskId];
+          await updateDocumentTaskIds({
+            documentId,
+            taskIds: updatedTaskIds,
+          });
+        }
       }
     }
 

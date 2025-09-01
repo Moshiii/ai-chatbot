@@ -1,27 +1,28 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/(auth)/auth';
 import {
-  createTask,
   saveDocument,
-  saveMessages,
   updateDocumentTaskIds,
+  getTaskById,
 } from '@/lib/db/queries';
-import { generateUUID } from '@/lib/utils';
 import { generateDocumentIds } from '@/lib/id-management';
 import { ChatSDKError } from '@/lib/errors';
-import type {
-  TaskResultData,
-  CanvasCreateRequest,
-  TaskState,
-} from '@/lib/types/tasks';
+
+interface CanvasCreateRequest {
+  taskIds: string[];
+  chatId: string;
+  title?: string;
+}
 
 /**
- * Canvas Creation API
- * Creates a canvas document and associated tasks in a single transaction
- * This endpoint is called by the frontend after collecting task data from A2A responses
+ * Canvas Document Creation API
+ * Creates ONLY the canvas document with references to existing task IDs
+ * Tasks must already exist in the database before calling this endpoint
+ *
+ * This endpoint should be called AFTER tasks are successfully stored via /api/tasks/create
  */
 export async function POST(request: NextRequest) {
-  console.log('[Canvas Create API] Received canvas creation request');
+  console.log('[Canvas Create API] Received canvas document creation request');
 
   try {
     // 1. Authentication
@@ -33,17 +34,17 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse and validate request
     const body: CanvasCreateRequest = await request.json();
-    const { tasks, chatId } = body;
+    const { taskIds, chatId, title = 'Task Planning Canvas' } = body;
 
     console.log(
-      `[Canvas Create API] Creating ${tasks.length} tasks for chat ${chatId}, user: ${session.user.id}`,
+      `[Canvas Create API] Creating canvas document for ${taskIds.length} existing tasks in chat ${chatId}`,
     );
 
     // 3. Validate required fields
-    if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+    if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
       return new ChatSDKError(
         'bad_request:api',
-        'Tasks array is required and must not be empty',
+        'Task IDs array is required and must not be empty',
       ).toResponse();
     }
 
@@ -54,121 +55,69 @@ export async function POST(request: NextRequest) {
       ).toResponse();
     }
 
-    // 4. Generate secure webhook token for all tasks
-    const webhookToken = generateUUID();
-    console.log('[Canvas Create API] Generated webhook token for tasks');
+    // 4. Verify that all tasks exist in the database
+    console.log('[Canvas Create API] Verifying all tasks exist...');
+    const taskDetails: any[] = [];
+    for (const taskId of taskIds) {
+      const existingTask = await getTaskById({ id: taskId });
+      if (!existingTask || existingTask.length === 0) {
+        return new ChatSDKError(
+          'bad_request:api',
+          `Task with ID ${taskId} does not exist`,
+        ).toResponse();
+      }
+      taskDetails.push(existingTask[0]);
+    }
+    console.log('[Canvas Create API] ✅ All tasks verified to exist');
 
     // 5. Generate canvas document IDs
-    const documentIds = generateDocumentIds('Task Planning Canvas', 'canvas');
+    const documentIds = generateDocumentIds(title, 'canvas');
     const canvasDocumentId = documentIds.document.databaseId;
 
-    // 6. Create all tasks with the same webhook token
-    console.log('[Canvas Create API] Creating tasks...');
-    const createdTasks = await Promise.all(
-      tasks.map(async (taskInput, index) => {
-        const taskId = taskInput.id || generateUUID();
-
-        const taskResult: TaskResultData = {
-          title: taskInput.title,
-          description: taskInput.description,
-          assignedAgent: taskInput.assignedAgent,
-          order: index,
-        };
-
-        const taskStatus: TaskState = taskInput.status || 'submitted';
-
-        const taskData = {
-          id: taskId,
-          contextId: chatId,
-          status: taskStatus,
-          statusMessage: `Task ${index + 1} of ${tasks.length}: ${taskInput.title}`,
-          result: taskResult,
-          webhookToken,
-        };
-
-        await createTask(taskData);
-        console.log(`[Canvas Create API] Created task: ${taskId}`);
-
-        return taskData;
-      }),
+    console.log(
+      `[Canvas Create API] Creating canvas document with task references: ${taskIds.join(', ')}`,
     );
 
-    // 7. Create canvas document linking all tasks
-    console.log('[Canvas Create API] Creating canvas document...');
+    // 6. Create canvas document with task references
     await saveDocument({
       id: canvasDocumentId,
-      title: 'Task Planning Canvas',
+      title,
       kind: 'canvas',
       content: JSON.stringify({
-        tasks: createdTasks.map((t) => ({
-          id: t.id,
-          title: t.result.title,
-          description: t.result.description,
-          status: t.status,
-          assignedAgent: t.result.assignedAgent,
+        tasks: taskDetails.map((task) => ({
+          id: task.id,
+          title: task.result?.title || 'Untitled Task',
+          description: task.result?.description || '',
+          status: task.status,
+          assignedAgent: task.result?.assignedAgent,
         })),
         createdAt: new Date().toISOString(),
-        totalTasks: tasks.length,
+        totalTasks: taskIds.length,
       }),
       userId: session.user.id,
     });
 
-    // 8. Update document with task IDs
-    const taskIds = createdTasks.map((task) => task.id);
+    // 7. Update document with task IDs
     await updateDocumentTaskIds({
       documentId: canvasDocumentId,
       taskIds,
     });
 
-    // 9. Create a message in the chat with canvas reference
     console.log(
-      '[Canvas Create API] Creating chat message with canvas reference...',
-    );
-    const canvasMessageId = generateUUID();
-    await saveMessages({
-      messages: [
-        {
-          id: canvasMessageId,
-          chatId,
-          role: 'assistant',
-          parts: [
-            {
-              type: 'text',
-              text: `I've created a task planning canvas with ${tasks.length} tasks. The canvas shows the breakdown and agent assignments.`,
-            },
-            {
-              type: 'data-canvasReference',
-              data: {
-                artifactType: 'document',
-                documentId: canvasDocumentId,
-                taskIds,
-                webhookToken,
-              },
-            },
-          ],
-          attachments: [],
-          createdAt: new Date(),
-        },
-      ],
-    });
-
-    console.log(
-      `[Canvas Create API] Successfully created canvas ${canvasDocumentId} with ${tasks.length} tasks`,
+      `[Canvas Create API] ✅ Canvas document created with ${taskIds.length} task references`,
     );
 
-    // 10. Return success response
+    // 8. Return success response
     return NextResponse.json(
       {
         success: true,
         canvas: {
           id: canvasDocumentId,
-          title: 'Task Planning Canvas',
+          title,
           taskIds,
-          tasks: createdTasks,
-          webhookToken,
           referenceId: documentIds.document.referenceId,
         },
-        message: `Created canvas with ${tasks.length} tasks`,
+        message: `Canvas document created with ${taskIds.length} task references`,
       },
       { status: 201 },
     );
@@ -181,7 +130,7 @@ export async function POST(request: NextRequest) {
 
     return new ChatSDKError(
       'bad_request:api',
-      'Failed to create canvas and tasks',
+      'Failed to create canvas document',
     ).toResponse();
   }
 }
