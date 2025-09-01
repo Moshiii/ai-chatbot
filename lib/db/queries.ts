@@ -718,3 +718,187 @@ export async function updateDocumentTaskIds({
     );
   }
 }
+
+/**
+ * Safely find or create a user by email for OAuth providers
+ * Handles race conditions and database constraint violations
+ */
+export async function findOrCreateOAuthUser(email: string): Promise<User> {
+  try {
+    // First, try to find existing user
+    const existingUsers = await db
+      .select()
+      .from(user)
+      .where(eq(user.email, email));
+
+    if (existingUsers.length > 0) {
+      console.log(
+        `Found existing user for email ${email} with ID ${existingUsers[0].id}`,
+      );
+      return existingUsers[0];
+    }
+
+    console.log(`No existing user found for email ${email}, creating new user`);
+
+    // User doesn't exist, try to create one
+    // Use onConflictDoNothing to handle race conditions
+    const [newUser] = await db
+      .insert(user)
+      .values({
+        email,
+        creditBalance: '0.00',
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    // If the insert was successful, return the new user
+    if (newUser) {
+      console.log(
+        `Successfully created new user for email ${email} with ID ${newUser.id}`,
+      );
+      return newUser;
+    }
+
+    // If we get here, it means there was a race condition
+    // and another process created the user. Try to find it again.
+    console.log(
+      `Insert failed (likely race condition), retrying lookup for email ${email}`,
+    );
+    const retryUsers = await db
+      .select()
+      .from(user)
+      .where(eq(user.email, email));
+
+    if (retryUsers.length > 0) {
+      console.log(
+        `Found user after retry for email ${email} with ID ${retryUsers[0].id}`,
+      );
+      return retryUsers[0];
+    }
+
+    // If we still can't find the user, something went wrong
+    console.error(
+      `Failed to find or create user for email ${email} after all attempts`,
+    );
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to create or find user after retry',
+    );
+  } catch (error) {
+    console.error('Error in findOrCreateOAuthUser:', error);
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to find or create OAuth user',
+    );
+  }
+}
+
+/**
+ * Upgrade a guest user to a regular user by linking their email
+ * This handles the case where a guest user authenticates with GitHub
+ * If the guest user doesn't exist, it will create a new user with the email
+ */
+export async function upgradeGuestToRegularUser(
+  guestUserId: string,
+  email: string,
+): Promise<User | null> {
+  try {
+    // First, check if there's already a regular user with this email
+    const existingRegularUsers = await db
+      .select()
+      .from(user)
+      .where(eq(user.email, email));
+
+    if (existingRegularUsers.length > 0) {
+      // There's already a regular user with this email
+      console.log(
+        `Found existing user with email ${email}, returning existing user`,
+      );
+      return existingRegularUsers[0];
+    }
+
+    // Try to find the guest user
+    const guestUsers = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, guestUserId));
+
+    if (guestUsers.length > 0) {
+      const guestUser = guestUsers[0];
+
+      // Check if guest user already has an email (shouldn't happen for guest users)
+      if (
+        guestUser.email &&
+        guestUser.email !== email &&
+        !guestUser.email.startsWith('guest-')
+      ) {
+        throw new ChatSDKError(
+          'bad_request:database',
+          'Guest user already has a different email',
+        );
+      }
+
+      // If guest user already has the correct email, just return it
+      if (guestUser.email === email) {
+        return guestUser;
+      }
+
+      // Update the guest user with the email
+      const [updatedUser] = await db
+        .update(user)
+        .set({
+          email,
+        })
+        .where(eq(user.id, guestUserId))
+        .returning();
+
+      if (updatedUser) {
+        console.log(
+          `Successfully upgraded guest user ${guestUserId} to email ${email}`,
+        );
+        return updatedUser;
+      }
+    }
+
+    // If we get here, either the guest user doesn't exist or the update failed
+    // Create a new user with the email instead
+    console.log(
+      `Guest user ${guestUserId} not found or update failed, creating new user with email ${email}`,
+    );
+
+    const [newUser] = await db
+      .insert(user)
+      .values({
+        email,
+        creditBalance: '0.00',
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (newUser) {
+      console.log(`Created new user with email ${email} and ID ${newUser.id}`);
+      return newUser;
+    }
+
+    // If insert failed due to conflict, try to find the user again
+    const retryUsers = await db
+      .select()
+      .from(user)
+      .where(eq(user.email, email));
+    if (retryUsers.length > 0) {
+      console.log(`Found user after retry for email ${email}`);
+      return retryUsers[0];
+    }
+
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to create or find user after upgrade attempt',
+    );
+  } catch (error) {
+    console.error('Error in upgradeGuestToRegularUser:', error);
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to upgrade guest user to regular user',
+    );
+  }
+}

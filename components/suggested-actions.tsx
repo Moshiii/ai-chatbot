@@ -13,25 +13,16 @@ import { useRouter } from 'next/navigation';
 // Constants for suggested actions
 const SUGGESTED_ACTIONS = [
   {
-    title: 'What are the advantages',
-    label: 'of using Next.js?',
-    action: 'What are the advantages of using Next.js?',
-  },
-  {
-    title: 'Write code to',
-    label: `demonstrate djikstra's algorithm`,
-    action: `Write code to demonstrate djikstra's algorithm`,
-  },
-  {
-    title: 'Create a task decomposition for a trip',
-    label: 'canvas for project planning',
+    title: 'Plan a trip',
+    label: 'to Japan for 5 days',
     action:
-      'Please create a task decomposition canvas to help me plan a 3-day trip to Vietnam',
+      'Please help me plan a 5-day trip to Japan, including suggested destinations, activities, and a daily itinerary.',
   },
   {
-    title: 'What is the weather',
-    label: 'in San Francisco?',
-    action: 'What is the weather in San Francisco?',
+    title: 'Research a topic',
+    label: 'about renewable energy',
+    action:
+      'Research and summarize the latest advancements in renewable energy technologies, focusing on solar and wind power.',
   },
 ] as const;
 
