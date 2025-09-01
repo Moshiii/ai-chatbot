@@ -387,6 +387,16 @@ export class A2aChatLanguageModel implements LanguageModelV2 {
             for await (const chunk of response) {
               chunkCount++;
               console.log(`[A2A] Received chunk ${chunkCount}:`, chunk);
+
+              // Filter out any document creation events for A2A mode
+              if (processor.shouldFilterDocumentEvents(chunk)) {
+                console.log(
+                  '[A2A] Filtering out document creation event:',
+                  chunk,
+                );
+                continue;
+              }
+
               processor.processChunk(chunk, controller);
             }
             console.log(`[A2A] Finished processing ${chunkCount} chunks`);
@@ -427,6 +437,20 @@ export class A2aChatLanguageModel implements LanguageModelV2 {
 class StreamProcessor {
   private processedEvents = new Map<string, Set<string>>();
   private controllerClosed = false;
+
+  shouldFilterDocumentEvents(chunk: any): boolean {
+    // Filter out any events that might trigger document creation in A2A mode
+    // These are the events that the data stream handler uses to create documents
+    const documentEvents = [
+      'data-id',
+      'data-title',
+      'data-kind',
+      'data-clear',
+      'data-finish',
+    ];
+
+    return documentEvents.includes(chunk.type);
+  }
 
   processChunk(
     chunk: any,
