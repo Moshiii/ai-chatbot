@@ -44,13 +44,8 @@ class TaskAgentExecutor(AgentExecutor):
             # Generate tasks based on user message and return in single response
             await self._generate_tasks_response(context, user_message, event_queue)
 
-            # Send final completion
-            await event_queue.enqueue_event(TaskStatusUpdateEvent(
-                taskId=context.task_id,
-                contextId=context.context_id,
-                status={"state": "completed", "message": "Task generation completed"},
-                final=True
-            ))
+            # For task generation, we don't send completion status - client handles storage
+            print(f"[TaskAgent] Task generation completed - client will handle storage")
 
         except Exception as e:
             print(f"[TaskAgent] Error in execute: {e}")
@@ -80,12 +75,14 @@ class TaskAgentExecutor(AgentExecutor):
             data_parts = []
             for job in jobs:
                 task_data = {
-                    "type": "task",
-                    "id": job.get("id", str(uuid.uuid4())),
-                    "title": job.get("title", "Unnamed Task"),
-                    "description": job.get("description", ""),
-                    "status": "submitted",
-                    "assignedAgent": job.get("assignedAgent")
+                    "type": "data-task",  # Match the expected type in A2A language model
+                    "task": {
+                        "id": job.get("id", str(uuid.uuid4())),
+                        "title": job.get("title", "Unnamed Task"),
+                        "description": job.get("description", ""),
+                        "status": "submitted",
+                        "assignedAgent": job.get("assignedAgent")
+                    }
                 }
                 data_parts.append(Part(
                     kind="data",
@@ -106,109 +103,114 @@ class TaskAgentExecutor(AgentExecutor):
 
             await event_queue.enqueue_event(response_message)
 
-            print(f"[TaskAgent] Successfully generated {len(jobs)} tasks in single response")
+            print(f"[TaskAgent] Successfully generated {len(jobs)} tasks - client will store them")
 
         except Exception as e:
             print(f"[TaskAgent] Error generating tasks: {e}")
             raise
 
+    async def _send_task_webhooks(self, context: RequestContext, jobs: List[Dict]) -> None:
+        """Send webhooks for each task to store them in the Next.js database"""
+        try:
+            # Extract webhook configuration from context
+            webhook_config = None
+            if hasattr(context, 'message') and context.message:
+                if hasattr(context.message, 'configuration') and context.message.configuration:
+                    webhook_config = context.message.configuration.get('pushNotificationConfig')
+
+            if not webhook_config:
+                print(f"[TaskAgent] No webhook configuration found, skipping webhook notifications")
+                return
+
+            webhook_url = webhook_config.get('url')
+            webhook_token = webhook_config.get('token')
+
+            if not webhook_url or not webhook_token:
+                print(f"[TaskAgent] Incomplete webhook configuration, skipping webhook notifications")
+                return
+
+            print(f"[TaskAgent] Sending webhooks for {len(jobs)} tasks to {webhook_url}")
+
+            # Create a canvas document first
+            canvas_document_id = str(uuid.uuid4())
+
+            # Send webhook for each task (without documentId - let Next.js handle document creation)
+            for job in jobs:
+                task_id = job.get("id", str(uuid.uuid4()))
+                task_data = {
+                    "id": task_id,
+                    "contextId": context.context_id,
+                    "kind": "task",
+                    "status": {"state": "submitted", "timestamp": datetime.utcnow().isoformat() + 'Z'},
+                    "result": {
+                        "title": job.get("title", "Unnamed Task"),
+                        "description": job.get("description", ""),
+                        "assignedAgent": job.get("assignedAgent"),
+                        "order": jobs.index(job)
+                    },
+                    "artifacts": []
+                }
+
+                # Send webhook (without documentId for now)
+                success = self._call_webhook(webhook_url, webhook_token, task_data, None)
+                if success:
+                    print(f"[TaskAgent] Successfully sent webhook for task {task_id}")
+                else:
+                    print(f"[TaskAgent] Failed to send webhook for task {task_id}")
+
+            print(f"[TaskAgent] Completed sending webhooks for {len(jobs)} tasks")
+
+        except Exception as e:
+            print(f"[TaskAgent] Error sending task webhooks: {e}")
+            # Don't raise here - we don't want webhook failures to break the main flow
+
     async def _process_request_async(self, context: RequestContext, user_message: str,
                                    document_id: Optional[str]) -> None:
-        """Process request asynchronously and send webhook notifications"""
+        """Process request asynchronously - task creation handled in main execute method"""
         try:
-            # Check request type and process accordingly
+            # For now, only handle job execution requests with webhooks
+            # Task creation is handled in the main execute method and returns tasks directly
             if self._is_job_execution_request(user_message):
                 print(f"[TaskAgent] Job execution request detected")
                 await self._execute_jobs_async(context, user_message, document_id)
-            elif self._is_task_creation_request(user_message):
-                print(f"[TaskAgent] Task creation request detected")
-                await self._create_task_with_jobs_async(context, user_message, document_id)
             else:
-                print(f"[TaskAgent] Default response")
-                await self._send_default_response_async(context, document_id)
+                print(f"[TaskAgent] Task creation handled in main execute method")
 
             print(f"[TaskAgent] Async processing completed for task {context.task_id}")
 
         except Exception as e:
             print(f"[TaskAgent] Error in async processing: {e}")
-            # Send failure webhook if document_id is available
-            if document_id:
-                webhook_token = str(uuid.uuid4())  # Generate token for error notification
-                webhook_url = f"{self.webhook_base_url}/api/webhook/tasks"
-                error_task_data = {
-                    "id": context.task_id,
-                    "contextId": context.context_id,
-                    "status": {"state": "failed", "message": str(e)},
-                    "artifacts": []
-                }
-                self._call_webhook(webhook_url, webhook_token, error_task_data, document_id)
+            # Send failure webhook if webhook config is available
+            webhook_config = None
+            if hasattr(context, 'message') and context.message:
+                if hasattr(context.message, 'configuration') and context.message.configuration:
+                    webhook_config = context.message.configuration.get('pushNotificationConfig')
+
+            if webhook_config:
+                webhook_url = webhook_config.get('url')
+                webhook_token = webhook_config.get('token')
+                if webhook_url and webhook_token:
+                    error_task_data = {
+                        "id": context.task_id,
+                        "contextId": context.context_id,
+                        "status": {"state": "failed", "message": str(e)},
+                        "artifacts": []
+                    }
+                    self._call_webhook(webhook_url, webhook_token, error_task_data, document_id)
     
     async def _create_task_with_jobs_async(self, context: RequestContext,
                                          user_message: str, document_id: Optional[str]) -> None:
-        """Create a task and decompose it into jobs using A2A webhook pattern"""
+        """Create a task and decompose it into jobs - client handles storage"""
         print(f"[TaskAgent] Creating task with jobs asynchronously")
 
         try:
-            # Generate webhook token for this task
-            webhook_token = str(uuid.uuid4())
-
-            # Create initial task data
-            task_data = {
-                "id": context.task_id,
-                "contextId": context.context_id,
-                "status": {"state": "working", "message": "Creating task and jobs"},
-                "webhook_token": webhook_token,
-            }
-
-            # Send initial task creation webhook
-            if document_id:
-                webhook_url = f"{self.webhook_base_url}/api/webhook/tasks"
-                success = self._call_webhook(webhook_url, webhook_token, task_data, document_id)
-                if not success:
-                    print(f"[TaskAgent] Failed to send initial webhook for task creation")
-                    return
-
-            # Simulate task creation delay
-            await asyncio.sleep(1)
-
             # Generate sample jobs based on user message
             jobs = self._generate_jobs(user_message)
 
-            # Create individual job tasks and send webhooks
-            for job in jobs:
-                job_task_id = str(uuid.uuid4())
-                job_task_data = {
-                    "id": job_task_id,
-                    "contextId": context.context_id,
-                    "status": {"state": "submitted", "message": f"Job created: {job['title']}"},
-                    "artifacts": [{
-                        "artifactId": str(uuid.uuid4()),
-                        "parts": [{
-                            "kind": "data",
-                            "data": job
-                        }]
-                    }]
-                }
+            # Return jobs in response for client to handle storage
+            # Webhooks are only used for execution updates, not initial creation
 
-                # Send job creation webhook
-                if document_id:
-                    self._call_webhook(webhook_url, webhook_token, job_task_data, document_id)
-
-                # Small delay between jobs
-                await asyncio.sleep(0.5)
-
-            # Send final completion webhook
-            final_task_data = {
-                "id": context.task_id,
-                "contextId": context.context_id,
-                "status": {"state": "completed", "message": f"Created {len(jobs)} jobs successfully"},
-                "artifacts": []
-            }
-
-            if document_id:
-                self._call_webhook(webhook_url, webhook_token, final_task_data, document_id)
-
-            print(f"[TaskAgent] Task creation completed with webhook notifications")
+            print(f"[TaskAgent] Generated {len(jobs)} jobs - client will store them")
 
         except Exception as e:
             print(f"[TaskAgent] Error in async task creation: {e}")
@@ -216,26 +218,38 @@ class TaskAgentExecutor(AgentExecutor):
 
     async def _execute_jobs_async(self, context: RequestContext,
                                 user_message: str, document_id: Optional[str]) -> None:
-        """Execute jobs for a given task using A2A webhook pattern"""
+        """Execute jobs for a given task using A2A webhook pattern for status updates"""
         print(f"[TaskAgent] Executing jobs asynchronously")
 
         try:
+            # Extract webhook configuration from context
+            webhook_config = None
+            if hasattr(context, 'message') and context.message:
+                if hasattr(context.message, 'configuration') and context.message.configuration:
+                    webhook_config = context.message.configuration.get('pushNotificationConfig')
+
+            if not webhook_config:
+                print(f"[TaskAgent] No webhook configuration found for execution updates")
+                return
+
+            webhook_url = webhook_config.get('url')
+            webhook_token = webhook_config.get('token')
+
+            if not webhook_url or not webhook_token:
+                print(f"[TaskAgent] Incomplete webhook configuration for execution updates")
+                return
+
             # Extract task ID from user message or use context task_id
             task_id = context.task_id
 
-            # Generate webhook token
-            webhook_token = str(uuid.uuid4())
-
             # Send initial execution webhook
-            if document_id:
-                webhook_url = f"{self.webhook_base_url}/api/webhook/tasks"
-                initial_task_data = {
-                    "id": task_id,
-                    "contextId": context.context_id,
-                    "status": {"state": "working", "message": "Starting job execution"},
-                    "artifacts": []
-                }
-                self._call_webhook(webhook_url, webhook_token, initial_task_data, document_id)
+            initial_task_data = {
+                "id": task_id,
+                "contextId": context.context_id,
+                "status": {"state": "working", "message": "Starting job execution"},
+                "artifacts": []
+            }
+            self._call_webhook(webhook_url, webhook_token, initial_task_data, document_id)
 
             # Simulate job execution
             jobs = self._generate_jobs("Execute sample jobs")  # In real implementation, get from database
@@ -249,8 +263,7 @@ class TaskAgentExecutor(AgentExecutor):
                     "artifacts": []
                 }
 
-                if document_id:
-                    self._call_webhook(webhook_url, webhook_token, job_start_data, document_id)
+                self._call_webhook(webhook_url, webhook_token, job_start_data, document_id)
 
                 # Simulate job execution time
                 await asyncio.sleep(2)
@@ -273,8 +286,7 @@ class TaskAgentExecutor(AgentExecutor):
                     }]
                 }
 
-                if document_id:
-                    self._call_webhook(webhook_url, webhook_token, job_complete_data, document_id)
+                self._call_webhook(webhook_url, webhook_token, job_complete_data, document_id)
 
             # Send final completion webhook
             final_task_data = {
@@ -284,8 +296,7 @@ class TaskAgentExecutor(AgentExecutor):
                 "artifacts": []
             }
 
-            if document_id:
-                self._call_webhook(webhook_url, webhook_token, final_task_data, document_id)
+            self._call_webhook(webhook_url, webhook_token, final_task_data, document_id)
 
             print(f"[TaskAgent] Job execution completed with webhook notifications")
 
