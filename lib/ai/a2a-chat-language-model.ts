@@ -80,15 +80,26 @@ export class A2aChatLanguageModel implements LanguageModelV2 {
     }
 
     this.client = new A2AClient(agentUrl);
+
+    console.log('[A2A Provider] Initialized with settings:', {
+      agentUrl,
+      contextId: this.settings.contextId,
+      hasWebhook: !!this.settings.pushNotificationConfig,
+      taskMode: this.settings.taskMode,
+    });
   }
 
   async doGenerate(options: Parameters<LanguageModelV2['doGenerate']>[0]) {
-    console.log('[A2A] Starting doGenerate');
+    console.log('[A2A] Starting doGenerate for task request');
     const message = this.createA2AMessage(options.prompt);
     console.log('[A2A] Created message:', JSON.stringify(message, null, 2));
 
+    console.log('[A2A] Sending to external agent...');
     const response = await this.sendMessage(message);
-    console.log('[A2A] Received response:', JSON.stringify(response, null, 2));
+    console.log(
+      '[A2A] Received response from external agent:',
+      JSON.stringify(response, null, 2),
+    );
 
     const content = this.extractContent(response);
     console.log('[A2A] Extracted content:', content);

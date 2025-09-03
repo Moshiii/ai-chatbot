@@ -186,7 +186,9 @@ export async function POST(request: Request) {
           : undefined,
       });
 
-      console.log('[Chat API] A2A model selected - client tools disabled');
+      console.log(
+        '[Chat API] A2A model selected - routing to external agent, no client tools',
+      );
     } else {
       modelProvider = myProvider.languageModel(selectedChatModel);
     }
@@ -201,7 +203,7 @@ export async function POST(request: Request) {
           experimental_activeTools:
             selectedChatModel === 'chat-model-reasoning' ||
             selectedChatModel === 'a2a-model'
-              ? []
+              ? [] // No client-side tools for A2A or reasoning mode
               : [
                   'getWeather',
                   'createDocument', // Keep for non-task workflows
@@ -226,6 +228,15 @@ export async function POST(request: Request) {
             functionId: 'stream-text',
           },
         });
+
+        console.log(
+          `[Chat API] Stream configuration for ${selectedChatModel}:`,
+          {
+            isA2AModel: selectedChatModel === 'a2a-model',
+            modelProvider: modelProvider?.modelId || 'unknown',
+            toolsDisabled: selectedChatModel === 'a2a-model',
+          },
+        );
 
         result.consumeStream();
 

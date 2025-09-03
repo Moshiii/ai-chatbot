@@ -188,7 +188,7 @@ export const systemPrompt = ({
     return `${regularPrompt}\n\n${requestPrompt}`;
   } else if (selectedChatModel === 'a2a-model') {
     // For A2A model, use simplified prompt without tool instructions
-    return `${regularPrompt}\n\n${requestPrompt}\n\n**A2A MODE:** You are acting as an interface to an external agent. Do not execute any tools directly. Pass user requests to the external agent for processing. The external agent will handle task generation and canvas creation.`;
+    return `${regularPrompt}\n\n${requestPrompt}\n\n**A2A MODE:** You are acting as a pure interface to an external agent. DO NOT execute any tools, create documents, or generate content. Simply pass the user's request to the external A2A agent for processing. The external agent will handle all task generation, document creation, and canvas management. Your only role is to relay the request - do not attempt to process or respond to it yourself.`;
   } else {
     return `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
   }
