@@ -62,32 +62,49 @@ class TaskAgentExecutor(AgentExecutor):
         print(f"[TaskAgent] Generating A2A-compliant tasks for: '{user_message}'")
 
         try:
-            # Generate sample jobs based on user message
+            # Add system prompt context to improve task generation
+            enhanced_message = self._enhance_user_message_with_system_prompt(user_message)
+            print(f"[TaskAgent] Enhanced message length: {len(enhanced_message)} chars")
+
+            # Generate sample jobs based on ORIGINAL user message for keyword detection
             jobs = await self._generate_jobs(user_message)
 
             # Create text part for human-readable confirmation
             text_part = Part(
                 kind="text",
-                text=f"I've analyzed your request and created {len(jobs)} tasks for execution."
+                text=f"I've analyzed your request '{user_message}' and created {len(jobs)} structured tasks for execution. Each task has been assigned to a specialized agent and is ready for processing."
             )
 
             # Create data parts for each task in A2A-compliant format
             data_parts = []
-            for job in jobs:
-                # A2A-compliant task data structure that TaskCollector expects
+            for i, job in enumerate(jobs):
+                # Ensure job has proper ID
+                job_id = job.get("id") or f"task-{str(uuid.uuid4())}"
+                
+                # A2A-compliant task data structure that matches our extraction logic
                 task_data = {
-                    "type": "task",  # Changed from "data-task" to match A2A spec
+                    "type": "task",  # This is the key our extraction looks for
                     "task": {
-                        "id": job.get("id", str(uuid.uuid4())),
-                        "title": job.get("title", "Unnamed Task"),
-                        "description": job.get("description", ""),
-                        "status": "submitted",
+                        "id": job_id,
+                        "title": job.get("title", f"Task {i+1}"),
+                        "description": job.get("description", f"Generated task {i+1} for: {user_message}"),
+                        "status": "submitted",  # Always start as submitted
                         "assignedAgent": job.get("assignedAgent"),
                         "contextId": context.context_id,
+                        "priority": "medium",
                         "createdAt": datetime.utcnow().isoformat() + 'Z',
-                        "webhookToken": str(uuid.uuid4())  # Generate token for webhook auth
+                        "webhookToken": str(uuid.uuid4()),  # Generate token for webhook auth
+                        "order": i,
+                        "metadata": {
+                            "source": "a2a_agent",
+                            "userRequest": user_message,
+                            "generatedAt": datetime.utcnow().isoformat() + 'Z'
+                        }
                     }
                 }
+                
+                print(f"[TaskAgent] 📝 Generated task {i+1}: {task_data['task']['title']} (ID: {job_id})")
+                
                 data_parts.append(Part(
                     kind="data",
                     data=task_data
@@ -98,19 +115,52 @@ class TaskAgentExecutor(AgentExecutor):
 
             # Create and enqueue the response message using A2A-compliant format
             response_message = new_agent_text_message(
-                f"Created {len(jobs)} tasks successfully. The frontend will now create a canvas to track their progress."
+                f"Successfully created {len(jobs)} tasks for your request. The system will now create a canvas to track their progress and execution."
             )
 
             # Replace the message parts with our structured task data
             response_message.parts = all_parts
 
+            # Create artifacts with task data for immediate inclusion in Task response
+            artifacts = []
+            for i, data_part in enumerate(data_parts):
+                artifact = Artifact(
+                    artifactId=f"task-artifact-{i}",
+                    parts=[data_part]
+                )
+                artifacts.append(artifact)
+                
+                # Also send as event for real-time updates
+                await event_queue.enqueue_event(TaskArtifactUpdateEvent(
+                    taskId=context.task_id,
+                    contextId=context.context_id,
+                    artifact=artifact,
+                    lastChunk=(i == len(data_parts) - 1)
+                ))
+            
+            # Enqueue the response message for the task history
             await event_queue.enqueue_event(response_message)
+            
+            # Send a completion status with both the response message AND artifacts
+            await event_queue.enqueue_event(TaskStatusUpdateEvent(
+                taskId=context.task_id,
+                contextId=context.context_id,
+                status={
+                    "state": "completed",
+                    "message": response_message,  # Include the response message in status
+                    "artifacts": artifacts  # Include artifacts in status for immediate access
+                },
+                final=True
+            ))
 
             print(f"[TaskAgent] ✅ Successfully generated {len(jobs)} A2A-compliant tasks")
-            print(f"[TaskAgent] 📋 Task IDs: {[job.get('id', 'unknown') for job in jobs]}")
+            print(f"[TaskAgent] 📋 Task IDs: {[job.get('id', f'task-{i}') for i, job in enumerate(jobs)]}")
+            print(f"[TaskAgent] 📦 Message parts: {len(all_parts)} (1 text + {len(data_parts)} data parts)")
 
         except Exception as e:
             print(f"[TaskAgent] ❌ Error generating tasks: {e}")
+            import traceback
+            traceback.print_exc()
             raise
 
     async def _send_task_webhooks(self, context: RequestContext, jobs: List[Dict]) -> None:
@@ -412,6 +462,45 @@ class TaskAgentExecutor(AgentExecutor):
                                 return text.split("Current request:")[-1].strip()
                             return text
         return ""
+    
+    def _enhance_user_message_with_system_prompt(self, user_message: str) -> str:
+        """Enhance user message with system prompt context for better task generation"""
+        
+        # System prompt to guide task generation
+        system_prompt = """
+You are a professional task decomposition agent. Your role is to break down user requests into specific, actionable tasks.
+
+TASK GENERATION GUIDELINES:
+1. Create 2-5 concrete, executable tasks
+2. Each task should have a clear title and detailed description
+3. Assign appropriate specialized agents to each task
+4. Tasks should be logically ordered and interdependent when necessary
+5. Include realistic effort estimates and agent capabilities
+
+AGENT TYPES AVAILABLE:
+- Travel Planner: Itinerary creation, destination research, booking assistance
+- Recipe Developer: Meal planning, recipe creation, dietary adjustments
+- Event Coordinator: Event planning, vendor coordination, timeline management
+- Personal Shopper: Product research, price comparison, purchase recommendations
+- Fitness Coach: Workout planning, fitness goal setting, progress tracking
+- Financial Advisor: Budget planning, investment advice, expense tracking
+- Home Organizer: Space optimization, decluttering strategies, storage solutions
+- Learning Mentor: Study planning, resource gathering, skill development guidance
+
+EXAMPLE TASK BREAKDOWN:
+User: "Plan a week-long trip to Italy"
+Tasks:
+1. Destination Research - Identify key cities and attractions to visit in Italy
+2. Itinerary Planning - Create a detailed day-by-day travel plan
+3. Accommodation Booking - Find and suggest hotels or rentals for each location
+4. Transportation Arrangement - Organize flights, trains, or car rentals between destinations
+5. Budget Planning - Estimate costs and suggest ways to manage expenses
+
+Now process this user request:
+"""
+        
+        enhanced_message = f"{system_prompt}\n\nUser Request: {user_message}"
+        return enhanced_message
     
     def _is_task_creation_request(self, message: str) -> bool:
         """Check if the message is requesting task creation/decomposition"""
@@ -747,131 +836,410 @@ class TaskAgentExecutor(AgentExecutor):
             return "Project Task"
     
     async def _generate_jobs(self, user_message: str) -> List[Dict[str, Any]]:
-        """Generate jobs based on user request"""
+        """Generate jobs based on user request with enhanced intelligence"""
         
-        if "web" in user_message.lower() or "website" in user_message.lower():
-            return self._create_web_project_jobs()
-        elif "scraping" in user_message.lower():
-            return self._create_scraping_jobs()
-        elif "api" in user_message.lower():
-            return self._create_api_jobs()
+        # Analyze the user message to determine project type and complexity
+        message_lower = user_message.lower()
+        print(f"[TaskAgent] 🔍 Analyzing message: '{message_lower}'")
+        
+        # Determine project type based on keywords
+        if any(keyword in message_lower for keyword in ["web app", "website", "web application", "frontend", "react", "next.js"]):
+            print(f"[TaskAgent] 🌐 Detected web project")
+            return self._create_web_project_jobs(user_message)
+        elif any(keyword in message_lower for keyword in ["scraping", "scrape", "data extraction", "web scraping"]):
+            print(f"[TaskAgent] 🕷️ Detected scraping project")
+            return self._create_scraping_jobs(user_message)
+        elif any(keyword in message_lower for keyword in ["api", "backend", "server", "database", "rest", "graphql"]):
+            print(f"[TaskAgent] 🔧 Detected API project")
+            return self._create_api_jobs(user_message)
+        elif any(keyword in message_lower for keyword in ["mobile", "app", "ios", "android", "react native"]):
+            print(f"[TaskAgent] 📱 Detected mobile project")
+            return self._create_mobile_jobs(user_message)
+        elif any(keyword in message_lower for keyword in ["ai", "machine learning", "ml", "data science", "analytics"]):
+            print(f"[TaskAgent] 🤖 Detected AI/ML project")
+            return self._create_ai_jobs(user_message)
+        elif any(keyword in message_lower for keyword in ["e-commerce", "shop", "store", "payment", "checkout"]):
+            print(f"[TaskAgent] 🛒 Detected e-commerce project")
+            return self._create_ecommerce_jobs(user_message)
+        elif any(keyword in message_lower for keyword in ["trip", "travel", "itinerary", "vacation", "journey", "plan", "japan", "destination"]):
+            print(f"[TaskAgent] ✈️ Detected travel project")
+            return self._create_travel_jobs(user_message)
         else:
-            return self._create_generic_jobs()
+            print(f"[TaskAgent] 📋 Using generic project template")
+            return self._create_intelligent_generic_jobs(user_message)
     
-    def _create_web_project_jobs(self) -> List[Dict[str, Any]]:
-        """Create jobs for web project"""
+    def _create_web_project_jobs(self, user_message: str) -> List[Dict[str, Any]]:
+        """Create jobs for web project based on user requirements"""
         return [
             {
                 "id": f"job-{self._next_job_id()}",
-                "title": "Frontend Development",
-                "description": "Create responsive user interface with React/Next.js",
-                "status": "pending",
+                "title": "Frontend Development & UI Design",
+                "description": f"Create responsive user interface for: {user_message}. Implement modern React/Next.js components with TypeScript, responsive design, and accessibility features.",
+                "status": "submitted",
                 "assignedAgent": {
                     "id": f"agent-{self._next_agent_id()}",
                     "name": "Frontend Specialist",
-                    "description": "Expert in React, TypeScript, and modern frontend",
-                    "capabilities": ["React", "TypeScript", "CSS", "UI/UX"],
-                    "pricingUsdt": 1.5,
-                    "walletAddress": "0x742d35cc6565c1c6e9e9f8e8d8f5c4b3a2f1e0d9"
+                    "description": "Expert in React, TypeScript, and modern frontend development",
+                    "capabilities": ["React", "Next.js", "TypeScript", "Tailwind CSS", "UI/UX Design"],
+                    "pricingUsdt": 2.5,
+                    "walletAddress": "0x742d35cc6565c1c6e9e9f8e8d8f5c4b3a2f1e0d9",
+                    "rating": 4.8,
+                    "completedTasks": 156
                 }
             },
             {
                 "id": f"job-{self._next_job_id()}",
-                "title": "Backend API Development",
-                "description": "Build REST API with authentication",
-                "status": "pending",
+                "title": "Backend API & Authentication",
+                "description": f"Build secure REST API for: {user_message}. Implement authentication, authorization, data validation, and API documentation.",
+                "status": "submitted",
                 "assignedAgent": {
                     "id": f"agent-{self._next_agent_id()}",
                     "name": "Backend Engineer",
-                    "description": "Specialized in Node.js and databases",
-                    "capabilities": ["Node.js", "PostgreSQL", "REST APIs"],
-                    "pricingUsdt": 2.0,
-                    "walletAddress": "0x851e46ec6695d2c7f0f0a9a9e9f8c5d4c3b2a1f0"
+                    "description": "Specialized in Node.js, APIs, and server architecture",
+                    "capabilities": ["Node.js", "Express", "PostgreSQL", "JWT", "REST APIs"],
+                    "pricingUsdt": 3.0,
+                    "walletAddress": "0x851e46ec6695d2c7f0f0a9a9e9f8c5d4c3b2a1f0",
+                    "rating": 4.9,
+                    "completedTasks": 203
                 }
             },
             {
                 "id": f"job-{self._next_job_id()}",
-                "title": "Database Design",
-                "description": "Design and optimize database schema",
-                "status": "pending",
+                "title": "Database Architecture & Optimization",
+                "description": f"Design scalable database schema for: {user_message}. Create optimized tables, indexes, relationships, and implement data migration strategies.",
+                "status": "submitted",
                 "assignedAgent": {
                     "id": f"agent-{self._next_agent_id()}",
                     "name": "Database Architect",
-                    "description": "Expert in database design and optimization",
-                    "capabilities": ["PostgreSQL", "Schema Design", "Performance"],
-                    "pricingUsdt": 1.8,
-                    "walletAddress": "0xa1b2c3d4e5f6789012345678901234567890abcd"
+                    "description": "Expert in database design, optimization, and performance tuning",
+                    "capabilities": ["PostgreSQL", "Schema Design", "Query Optimization", "Data Modeling"],
+                    "pricingUsdt": 2.8,
+                    "walletAddress": "0xa1b2c3d4e5f6789012345678901234567890abcd",
+                    "rating": 4.7,
+                    "completedTasks": 89
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Testing & Quality Assurance",
+                "description": f"Implement comprehensive testing suite for: {user_message}. Create unit tests, integration tests, E2E tests, and performance monitoring.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "QA Engineer",
+                    "description": "Specialized in test automation and quality assurance",
+                    "capabilities": ["Jest", "Cypress", "Playwright", "Test Automation", "Performance Testing"],
+                    "pricingUsdt": 2.2,
+                    "walletAddress": "0xdef456789abcdef456789abcdef456789abcdef4",
+                    "rating": 4.6,
+                    "completedTasks": 134
                 }
             }
         ]
     
-    def _create_scraping_jobs(self) -> List[Dict[str, Any]]:
+    def _create_scraping_jobs(self, user_message: str) -> List[Dict[str, Any]]:
         """Create jobs for scraping project"""
         return [
             {
                 "id": f"job-{self._next_job_id()}",
                 "title": "Web Scraper Development",
-                "description": "Build robust web scraper",
-                "status": "pending",
+                "description": f"Build robust web scraper for: {user_message}. Implement data extraction, handle anti-bot measures, and ensure reliable data collection.",
+                "status": "submitted",
                 "assignedAgent": {
                     "id": f"agent-{self._next_agent_id()}",
                     "name": "Scraping Specialist",
-                    "description": "Expert in web scraping",
-                    "capabilities": ["Python", "Scrapy", "BeautifulSoup"],
-                    "pricingUsdt": 1.2,
-                    "walletAddress": "0xef1234567890abcdef1234567890abcdef123456"
+                    "description": "Expert in web scraping and data extraction",
+                    "capabilities": ["Python", "Scrapy", "BeautifulSoup", "Selenium", "Proxy Management"],
+                    "pricingUsdt": 2.4,
+                    "walletAddress": "0xef1234567890abcdef1234567890abcdef123456",
+                    "rating": 4.6,
+                    "completedTasks": 87
                 }
             },
             {
                 "id": f"job-{self._next_job_id()}",
-                "title": "Data Processing Pipeline",
-                "description": "Process scraped data",
-                "status": "pending",
+                "title": "Data Processing & Storage",
+                "description": f"Process and store scraped data for: {user_message}. Clean data, implement ETL pipeline, and set up data storage solutions.",
+                "status": "submitted",
                 "assignedAgent": {
                     "id": f"agent-{self._next_agent_id()}",
                     "name": "Data Engineer",
-                    "description": "ETL pipeline specialist",
-                    "capabilities": ["Python", "Pandas", "ETL"],
-                    "pricingUsdt": 1.4,
-                    "walletAddress": "0x123456789abcdef123456789abcdef123456789a"
+                    "description": "ETL pipeline and data processing specialist",
+                    "capabilities": ["Python", "Pandas", "ETL", "Data Cleaning", "Database Design"],
+                    "pricingUsdt": 2.6,
+                    "walletAddress": "0x123456789abcdef123456789abcdef123456789a",
+                    "rating": 4.7,
+                    "completedTasks": 103
                 }
             }
         ]
     
-    def _create_api_jobs(self) -> List[Dict[str, Any]]:
+    def _create_api_jobs(self, user_message: str) -> List[Dict[str, Any]]:
         """Create jobs for API project"""
         return [
             {
                 "id": f"job-{self._next_job_id()}",
-                "title": "API Design & Documentation",
-                "description": "Design RESTful API endpoints",
-                "status": "pending",
+                "title": "API Design & Architecture",
+                "description": f"Design RESTful API for: {user_message}. Create API specification, design endpoints, and plan data models.",
+                "status": "submitted",
                 "assignedAgent": {
                     "id": f"agent-{self._next_agent_id()}",
                     "name": "API Architect",
-                    "description": "API design expert",
-                    "capabilities": ["REST API", "OpenAPI", "Documentation"],
-                    "pricingUsdt": 1.6,
-                    "walletAddress": "0x9876543210fedcba9876543210fedcba98765432"
+                    "description": "Expert in API design and system architecture",
+                    "capabilities": ["REST API", "GraphQL", "OpenAPI", "System Design", "Documentation"],
+                    "pricingUsdt": 2.8,
+                    "walletAddress": "0x9876543210fedcba9876543210fedcba98765432",
+                    "rating": 4.8,
+                    "completedTasks": 156
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "API Implementation & Testing",
+                "description": f"Implement and test API for: {user_message}. Build endpoints, implement authentication, and create comprehensive test suite.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Backend Developer",
+                    "description": "Specialist in API development and testing",
+                    "capabilities": ["Node.js", "Express", "Testing", "Authentication", "Database Integration"],
+                    "pricingUsdt": 3.0,
+                    "walletAddress": "0xapi456789abcdef456789abcdef456789abcdef45",
+                    "rating": 4.9,
+                    "completedTasks": 189
                 }
             }
         ]
     
-    def _create_generic_jobs(self) -> List[Dict[str, Any]]:
-        """Create generic jobs"""
+    def _create_intelligent_generic_jobs(self, user_message: str) -> List[Dict[str, Any]]:
+        """Create intelligent generic jobs based on user message analysis"""
         return [
             {
                 "id": f"job-{self._next_job_id()}",
-                "title": "Requirements Analysis",
-                "description": "Analyze project requirements",
-                "status": "pending",
+                "title": "Requirements Analysis & Planning",
+                "description": f"Analyze and document requirements for: {user_message}. Create detailed project specification, user stories, and technical architecture plan.",
+                "status": "submitted",
                 "assignedAgent": {
                     "id": f"agent-{self._next_agent_id()}",
                     "name": "Project Analyst",
-                    "description": "Requirements expert",
-                    "capabilities": ["Analysis", "Planning", "Documentation"],
-                    "pricingUsdt": 1.0,
-                    "walletAddress": "0xabcdef123456789abcdef123456789abcdef1234"
+                    "description": "Expert in requirements analysis and project planning",
+                    "capabilities": ["Requirements Analysis", "Project Planning", "Documentation", "Stakeholder Management"],
+                    "pricingUsdt": 2.0,
+                    "walletAddress": "0xabcdef123456789abcdef123456789abcdef1234",
+                    "rating": 4.5,
+                    "completedTasks": 78
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Technical Implementation",
+                "description": f"Implement core functionality for: {user_message}. Develop the main features, integrate necessary services, and ensure code quality.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Full-Stack Developer",
+                    "description": "Versatile developer with full-stack capabilities",
+                    "capabilities": ["JavaScript", "Python", "React", "Node.js", "Database Design"],
+                    "pricingUsdt": 2.8,
+                    "walletAddress": "0x123456789abcdef123456789abcdef123456789a",
+                    "rating": 4.7,
+                    "completedTasks": 145
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Testing & Deployment",
+                "description": f"Test and deploy solution for: {user_message}. Implement testing strategies, perform quality assurance, and handle production deployment.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "DevOps Engineer",
+                    "description": "Expert in deployment, testing, and infrastructure",
+                    "capabilities": ["CI/CD", "Testing", "Docker", "AWS", "Monitoring"],
+                    "pricingUsdt": 2.4,
+                    "walletAddress": "0x987654321fedcba987654321fedcba9876543210",
+                    "rating": 4.6,
+                    "completedTasks": 92
+                }
+            }
+        ]
+    
+    def _create_mobile_jobs(self, user_message: str) -> List[Dict[str, Any]]:
+        """Create jobs for mobile app development"""
+        return [
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Mobile App UI/UX Design",
+                "description": f"Design mobile interface for: {user_message}. Create wireframes, prototypes, and responsive mobile designs following platform guidelines.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Mobile UI/UX Designer",
+                    "description": "Specialist in mobile app design and user experience",
+                    "capabilities": ["React Native", "iOS Design", "Android Design", "Figma", "User Research"],
+                    "pricingUsdt": 2.6,
+                    "walletAddress": "0xmobile123456789abcdef123456789abcdef12345",
+                    "rating": 4.8,
+                    "completedTasks": 67
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Cross-Platform Development",
+                "description": f"Develop mobile application for: {user_message}. Implement features using React Native or Flutter for iOS and Android platforms.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Mobile Developer",
+                    "description": "Expert in cross-platform mobile development",
+                    "capabilities": ["React Native", "Flutter", "iOS", "Android", "Mobile APIs"],
+                    "pricingUsdt": 3.2,
+                    "walletAddress": "0xmobiledev789abcdef789abcdef789abcdef789ab",
+                    "rating": 4.9,
+                    "completedTasks": 112
+                }
+            }
+        ]
+    
+    def _create_ai_jobs(self, user_message: str) -> List[Dict[str, Any]]:
+        """Create jobs for AI/ML projects"""
+        return [
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Data Analysis & Model Design",
+                "description": f"Design AI/ML solution for: {user_message}. Analyze data requirements, select appropriate algorithms, and design model architecture.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Data Scientist",
+                    "description": "Expert in machine learning and data analysis",
+                    "capabilities": ["Python", "TensorFlow", "PyTorch", "Data Analysis", "Model Design"],
+                    "pricingUsdt": 3.5,
+                    "walletAddress": "0xdatascience456789abcdef456789abcdef456789",
+                    "rating": 4.9,
+                    "completedTasks": 89
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "ML Pipeline & Integration",
+                "description": f"Implement ML pipeline for: {user_message}. Build data processing pipeline, train models, and integrate with production systems.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "ML Engineer",
+                    "description": "Specialist in ML operations and production systems",
+                    "capabilities": ["MLOps", "Docker", "Kubernetes", "Model Deployment", "API Integration"],
+                    "pricingUsdt": 3.8,
+                    "walletAddress": "0xmlengineer789abcdef789abcdef789abcdef78",
+                    "rating": 4.8,
+                    "completedTasks": 76
+                }
+            }
+        ]
+    
+    def _create_ecommerce_jobs(self, user_message: str) -> List[Dict[str, Any]]:
+        """Create jobs for e-commerce projects"""
+        return [
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "E-commerce Platform Development",
+                "description": f"Build e-commerce platform for: {user_message}. Implement product catalog, shopping cart, user accounts, and admin dashboard.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "E-commerce Developer",
+                    "description": "Expert in e-commerce platforms and online retail",
+                    "capabilities": ["Shopify", "WooCommerce", "React", "Node.js", "Payment Integration"],
+                    "pricingUsdt": 3.4,
+                    "walletAddress": "0xecommerce123456789abcdef123456789abcdef12",
+                    "rating": 4.7,
+                    "completedTasks": 134
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Payment & Security Integration",
+                "description": f"Implement secure payment system for: {user_message}. Integrate payment gateways, implement security measures, and ensure PCI compliance.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Payment Security Specialist",
+                    "description": "Expert in payment processing and security",
+                    "capabilities": ["Stripe", "PayPal", "Security", "PCI Compliance", "Fraud Prevention"],
+                    "pricingUsdt": 3.6,
+                    "walletAddress": "0xpayment456789abcdef456789abcdef456789abc",
+                    "rating": 4.9,
+                    "completedTasks": 98
+                }
+            }
+        ]
+    
+    def _create_travel_jobs(self, user_message: str) -> List[Dict[str, Any]]:
+        """Create jobs for travel planning projects"""
+        return [
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Destination Research & Planning",
+                "description": f"Research destinations and create detailed itinerary for: {user_message}. Analyze best locations, seasonal considerations, cultural highlights, and must-see attractions.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Travel Planning Specialist",
+                    "description": "Expert in destination research and itinerary planning",
+                    "capabilities": ["Destination Research", "Cultural Knowledge", "Seasonal Planning", "Attraction Analysis"],
+                    "pricingUsdt": 2.2,
+                    "walletAddress": "0xtravel123456789abcdef123456789abcdef1234",
+                    "rating": 4.8,
+                    "completedTasks": 167
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Accommodation & Transportation",
+                "description": f"Arrange accommodations and transportation for: {user_message}. Research hotels, book flights, plan local transportation, and optimize travel routes.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Travel Logistics Coordinator",
+                    "description": "Specialist in travel bookings and logistics coordination",
+                    "capabilities": ["Hotel Booking", "Flight Planning", "Transportation", "Route Optimization"],
+                    "pricingUsdt": 2.4,
+                    "walletAddress": "0xlogistics456789abcdef456789abcdef456789",
+                    "rating": 4.7,
+                    "completedTasks": 143
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Daily Activity Planning",
+                "description": f"Create detailed daily activities and experiences for: {user_message}. Plan sightseeing tours, cultural experiences, dining recommendations, and leisure activities.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Experience Curator",
+                    "description": "Expert in creating memorable travel experiences",
+                    "capabilities": ["Activity Planning", "Cultural Experiences", "Restaurant Recommendations", "Tour Coordination"],
+                    "pricingUsdt": 2.0,
+                    "walletAddress": "0xexperience789abcdef789abcdef789abcdef789",
+                    "rating": 4.9,
+                    "completedTasks": 198
+                }
+            },
+            {
+                "id": f"job-{self._next_job_id()}",
+                "title": "Budget & Documentation",
+                "description": f"Manage budget and travel documentation for: {user_message}. Calculate costs, track expenses, handle visa requirements, and prepare travel documents.",
+                "status": "submitted",
+                "assignedAgent": {
+                    "id": f"agent-{self._next_agent_id()}",
+                    "name": "Travel Documentation Specialist",
+                    "description": "Expert in travel documentation and budget management",
+                    "capabilities": ["Budget Planning", "Visa Processing", "Travel Insurance", "Document Management"],
+                    "pricingUsdt": 1.8,
+                    "walletAddress": "0xbudget123456789abcdef123456789abcdef123",
+                    "rating": 4.6,
+                    "completedTasks": 124
                 }
             }
         ]
