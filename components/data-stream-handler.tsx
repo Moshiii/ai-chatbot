@@ -48,6 +48,7 @@ export function DataStreamHandler() {
             return {
               ...draftArtifact,
               documentId: delta.data,
+              content: delta.data, // Ensure CanvasContent resolves the document
               status: 'streaming',
             };
 
