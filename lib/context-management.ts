@@ -5,7 +5,7 @@
  * ensuring proper task association and session management.
  */
 
-import { generateId } from 'ai';
+import { generateUUID } from './utils';
 
 /**
  * Generate a stable context ID for a chat session
@@ -21,7 +21,7 @@ export function generateContextId(chatId: string): string {
  * Generate a unique webhook token for task authentication
  */
 export function generateWebhookToken(): string {
-  return generateId();
+  return generateUUID();
 }
 
 /**
@@ -42,7 +42,7 @@ export function extractContextId(
   a2aContextId?: string,
 ): string {
   // Prefer A2A context ID if available, otherwise use chat ID
-  return a2aContextId || (chatId ? generateContextId(chatId) : generateId());
+  return a2aContextId || (chatId ? generateContextId(chatId) : generateUUID());
 }
 
 /**

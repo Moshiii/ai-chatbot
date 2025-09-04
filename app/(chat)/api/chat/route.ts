@@ -17,17 +17,17 @@ import {
   saveChat,
   saveMessages,
 } from '@/lib/db/queries';
-import { convertToUIMessages, generateUUID } from '@/lib/utils';
+import { convertToUIMessages } from '@/lib/utils';
 import { generateChatIds } from '@/lib/id-management';
 import { generateTitleFromUserMessage } from '../../actions';
 import { createDocument } from '@/lib/ai/tools/create-document';
 import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
+import { requestA2AAgent } from '@/lib/ai/tools/request-a2a-agent';
 
 import { isProductionEnvironment } from '@/lib/constants';
 import { myProvider } from '@/lib/ai/providers';
-import { a2a } from '@/lib/ai/a2a-provider';
 import { entitlementsByUserType } from '@/lib/ai/entitlements';
 import { postRequestBodySchema, type PostRequestBody } from './schema';
 import { geolocation } from '@vercel/functions';
@@ -153,45 +153,16 @@ export async function POST(request: Request) {
       ],
     });
 
-    // Handle A2A model - generate webhook token for session
-    let webhookToken: string | null = null;
-
-    if (selectedChatModel === 'a2a-model') {
-      // Generate webhook token for this session
-      webhookToken = generateUUID();
-      console.log('[Chat API] Generated webhook token for A2A session');
-    }
-
     const chatIds = generateChatIds();
     const streamId = chatIds.generateStreamId().databaseId;
     await createStreamId({ streamId, chatId: id });
 
-    // Select the appropriate model provider
-    let modelProvider: any;
-    if (selectedChatModel === 'a2a-model') {
-      // Configure A2A provider with webhook settings
-      const a2aAgentUrl = process.env.A2A_AGENT_URL || 'http://localhost:9999';
-      console.log('[Chat API] Using A2A agent URL:', a2aAgentUrl);
+    // Always use regular model provider (simplified architecture)
+    const modelProvider = myProvider.languageModel(selectedChatModel);
 
-      modelProvider = a2a(a2aAgentUrl, {
-        chatId: id,
-        contextId: id, // Use chatId as contextId
-        taskMode: true,
-        // Include webhook configuration for agent to use later
-        pushNotificationConfig: webhookToken
-          ? {
-              url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/webhook/tasks`,
-              token: webhookToken,
-            }
-          : undefined,
-      });
-
-      console.log(
-        '[Chat API] A2A model selected - routing to external agent, no client tools',
-      );
-    } else {
-      modelProvider = myProvider.languageModel(selectedChatModel);
-    }
+    console.log(
+      `[Chat API] Using regular model provider: ${selectedChatModel}`,
+    );
 
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
@@ -201,19 +172,19 @@ export async function POST(request: Request) {
           messages: convertToModelMessages(uiMessages),
           stopWhen: stepCountIs(5),
           experimental_activeTools:
-            selectedChatModel === 'chat-model-reasoning' ||
-            selectedChatModel === 'a2a-model'
-              ? [] // No client-side tools for A2A or reasoning mode
+            selectedChatModel === 'chat-model-reasoning'
+              ? [] // No tools for reasoning mode
               : [
                   'getWeather',
                   'createDocument', // Keep for non-task workflows
                   'updateDocument',
                   'requestSuggestions',
+                  'requestA2AAgent', // Integrated tool for A2A agent communication + task management
                 ],
           experimental_transform: smoothStream({ chunking: 'word' }),
           tools:
-            selectedChatModel === 'a2a-model'
-              ? {} // Disable all client-side tools for A2A - external agent handles everything
+            selectedChatModel === 'chat-model-reasoning'
+              ? {} // No tools for reasoning mode
               : {
                   getWeather,
                   createDocument: createDocument({ session, dataStream }),
@@ -222,6 +193,7 @@ export async function POST(request: Request) {
                     session,
                     dataStream,
                   }),
+                  requestA2AAgent: requestA2AAgent({ session, dataStream }), // Integrated A2A communication + task management tool
                 },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
@@ -232,9 +204,16 @@ export async function POST(request: Request) {
         console.log(
           `[Chat API] Stream configuration for ${selectedChatModel}:`,
           {
-            isA2AModel: selectedChatModel === 'a2a-model',
             modelProvider: modelProvider?.modelId || 'unknown',
-            toolsDisabled: selectedChatModel === 'a2a-model',
+            toolsDisabled: selectedChatModel === 'chat-model-reasoning',
+            activeToolsCount:
+              selectedChatModel === 'chat-model-reasoning' ? 0 : 5,
+            toolsObject:
+              selectedChatModel === 'chat-model-reasoning'
+                ? 'empty'
+                : 'populated',
+            hasA2ATool: selectedChatModel !== 'chat-model-reasoning',
+            integratedTaskFlow: selectedChatModel !== 'chat-model-reasoning',
           },
         );
 

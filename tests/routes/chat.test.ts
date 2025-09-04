@@ -363,4 +363,57 @@ test.describe
 
       expect(firstResponseContent).toEqual(secondResponseContent);
     });
+
+    test('Ada can send A2A task request without triggering document creation', async ({
+      adaContext,
+    }) => {
+      test.skip(); // Skip until Python agent is available for testing
+      const chatId = generateUUID();
+
+      const response = await adaContext.request.post('/api/chat', {
+        data: {
+          id: chatId,
+          message: {
+            id: generateUUID(),
+            role: 'user',
+            content: 'Please help me plan a 5-day trip to Japan',
+            parts: [
+              {
+                type: 'text',
+                text: 'Please help me plan a 5-day trip to Japan',
+              },
+            ],
+            createdAt: new Date().toISOString(),
+          },
+          selectedChatModel: 'a2a-model',
+          selectedVisibilityType: 'private',
+        },
+      });
+
+      expect(response.status()).toBe(200);
+
+      // Check that the response doesn't contain document creation events
+      const responseText = await response.text();
+      const lines = responseText.split('\n');
+
+      // Should not contain any data-kind, data-title, or data-id events
+      // that would indicate document creation
+      const documentEvents = lines.filter(
+        (line) =>
+          line.includes('data-kind') ||
+          line.includes('data-title') ||
+          line.includes('data-id') ||
+          line.includes('data-clear') ||
+          line.includes('data-finish'),
+      );
+
+      expect(documentEvents.length).toBe(0);
+
+      // Should contain data-task events instead
+      const taskEvents = lines.filter((line) => line.includes('data-task'));
+
+      // This will be 0 until Python agent returns proper format
+      // For now, we just verify no document creation happens
+      console.log('A2A response contains task events:', taskEvents.length);
+    });
   });

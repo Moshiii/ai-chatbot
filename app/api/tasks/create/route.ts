@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/(auth)/auth';
-import { createTask } from '@/lib/db/queries';
+import { createTask, getTaskById } from '@/lib/db/queries';
 import { generateUUID } from '@/lib/utils';
 import { ChatSDKError } from '@/lib/errors';
 import type { TaskResultData, TaskState } from '@/lib/types/tasks';
@@ -12,6 +12,7 @@ interface TaskCreateRequest {
     description: string;
     status?: TaskState;
     assignedAgent?: any;
+    webhookToken?: string;
   }>;
   chatId: string;
 }
@@ -55,9 +56,9 @@ export async function POST(request: NextRequest) {
       ).toResponse();
     }
 
-    // 4. Generate secure webhook token for all tasks
-    const webhookToken = generateUUID();
-    console.log('[Tasks Create API] Generated webhook token for tasks');
+    // 4. Generate a fallback webhook token for all tasks if not provided per-task
+    const fallbackWebhookToken = generateUUID();
+    console.log('[Tasks Create API] Prepared fallback webhook token for tasks');
 
     // 5. Create all tasks in database
     console.log('[Tasks Create API] Creating tasks in database...');
@@ -68,6 +69,26 @@ export async function POST(request: NextRequest) {
         const taskInput = tasks[index];
         const taskId = taskInput.id || generateUUID();
 
+        // If task already exists, skip creation and add existing to results
+        const existing = await getTaskById({ id: taskId });
+        if (existing && existing.length > 0) {
+          const existingTask = existing[0];
+          console.log(
+            `[Tasks Create API] ↷ Task already exists, skipping create: ${taskId}`,
+          );
+          createdTasks.push({
+            id: existingTask.id,
+            contextId: existingTask.contextId,
+            status: existingTask.status,
+            statusMessage: existingTask.statusMessage,
+            result: existingTask.result,
+            webhookToken: existingTask.webhookToken,
+            createdAt: existingTask.createdAt,
+            updatedAt: existingTask.updatedAt,
+          });
+          continue;
+        }
+
         const taskResult: TaskResultData = {
           title: taskInput.title,
           description: taskInput.description,
@@ -76,6 +97,9 @@ export async function POST(request: NextRequest) {
         };
 
         const taskStatus: TaskState = taskInput.status || 'submitted';
+
+        // Use provided webhook token or fallback
+        const webhookToken = taskInput.webhookToken || fallbackWebhookToken;
 
         const taskData = {
           id: taskId,
@@ -106,7 +130,7 @@ export async function POST(request: NextRequest) {
         success: true,
         tasks: createdTasks,
         taskIds,
-        webhookToken,
+        webhookToken: fallbackWebhookToken,
         message: `Successfully created ${createdTasks.length} tasks`,
       },
       { status: 201 },

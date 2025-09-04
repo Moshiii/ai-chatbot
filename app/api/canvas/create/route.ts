@@ -116,6 +116,13 @@ export async function POST(request: NextRequest) {
           title,
           taskIds,
           referenceId: documentIds.document.referenceId,
+          // Optional convenience: echo minimal task details for UI if needed later
+          tasks: taskDetails.map((t) => ({
+            id: t.id,
+            status: t.status,
+            title: t.result?.title || 'Untitled Task',
+            description: t.result?.description || '',
+          })),
         },
         message: `Canvas document created with ${taskIds.length} task references`,
       },

@@ -518,7 +518,7 @@ class StreamProcessor {
     controller: ReadableStreamDefaultController<LanguageModelV2StreamPart>,
   ): void {
     for (const part of parts) {
-      // Handle task data parts from A2A agent
+      // Handle task data parts from A2A agent - CRITICAL FIX
       if (
         part.kind === 'data' &&
         'data' in part &&
@@ -527,13 +527,28 @@ class StreamProcessor {
         'type' in part.data &&
         part.data.type === 'task'
       ) {
-        console.log('[A2A] Processing task data part:', part.data);
+        console.log(
+          '[A2A] 🔧 CRITICAL FIX: Processing A2A-compliant task data part:',
+          {
+            taskId: (part.data as any).task?.id,
+            taskTitle: (part.data as any).task?.title,
+            taskStatus: (part.data as any).task?.status,
+            contextId: (part.data as any).task?.contextId,
+            hasWebhookToken: !!(part.data as any).task?.webhookToken,
+          },
+        );
+
+        // Fix: Enqueue as data-task type for TaskCollector to detect
         controller.enqueue({
-          type: 'tool-result',
-          toolCallId: generateId(),
-          toolName: 'task-generation',
-          result: part.data,
-        });
+          type: 'data-task',
+          data: {
+            task: (part.data as any).task,
+          },
+        } as any);
+
+        console.log(
+          '[A2A] ✅ A2A-compliant task data enqueued for TaskCollector processing',
+        );
       }
 
       // Handle toolcall data parts

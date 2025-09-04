@@ -50,12 +50,23 @@ export function TaskCollector({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('[TaskCollector] 🔍 Received task parts:', {
+      count: taskParts.length,
+      tasks: taskParts.map((part, index) => ({
+        index,
+        id: part.data.task?.id,
+        title: part.data.task?.title,
+        status: part.data.task?.status,
+      })),
+    });
+
     const createTasksAndCanvas = async () => {
       try {
         setStatus('creating');
 
         // Step 1: Extract tasks from the parts
         const tasks = taskParts.map((part) => part.data.task);
+        console.log('[TaskCollector] 📋 Extracted tasks:', tasks);
 
         console.log('[TaskCollector] Step 1: Storing tasks in database...');
 
@@ -119,7 +130,11 @@ export function TaskCollector({
         onCanvasCreated({
           id: canvasData.canvas.id,
           taskIds: canvasData.canvas.taskIds,
-          webhookToken: taskData.webhookToken, // Use webhook token from task creation
+          webhookToken:
+            // Prefer per-task token if present, else fallback to batch token
+            (Array.isArray(taskData.tasks) &&
+              taskData.tasks[0]?.webhookToken) ||
+            taskData.webhookToken,
         });
 
         setStatus('completed');
