@@ -3,7 +3,7 @@
 import asyncio
 import json
 import uuid
-import requests
+import httpx
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -52,18 +52,18 @@ class TaskAgentExecutor(AgentExecutor):
             await event_queue.enqueue_event(TaskStatusUpdateEvent(
                 taskId=context.task_id,
                 contextId=context.context_id,
-                status={"state": "failed", "message": str(e)},
+                status={"state": "failed"},
                 final=True
             ))
 
     async def _generate_tasks_response(self, context: RequestContext, user_message: str,
                                      event_queue: EventQueue) -> None:
-        """Generate tasks and return them in a single A2A message response"""
-        print(f"[TaskAgent] Generating tasks for: '{user_message}'")
+        """Generate tasks and return them in A2A-compliant format for client-side processing"""
+        print(f"[TaskAgent] Generating A2A-compliant tasks for: '{user_message}'")
 
         try:
             # Generate sample jobs based on user message
-            jobs = self._generate_jobs(user_message)
+            jobs = await self._generate_jobs(user_message)
 
             # Create text part for human-readable confirmation
             text_part = Part(
@@ -71,17 +71,21 @@ class TaskAgentExecutor(AgentExecutor):
                 text=f"I've analyzed your request and created {len(jobs)} tasks for execution."
             )
 
-            # Create data parts for each task
+            # Create data parts for each task in A2A-compliant format
             data_parts = []
             for job in jobs:
+                # A2A-compliant task data structure that TaskCollector expects
                 task_data = {
-                    "type": "data-task",  # Match the expected type in A2A language model
+                    "type": "task",  # Changed from "data-task" to match A2A spec
                     "task": {
                         "id": job.get("id", str(uuid.uuid4())),
                         "title": job.get("title", "Unnamed Task"),
                         "description": job.get("description", ""),
                         "status": "submitted",
-                        "assignedAgent": job.get("assignedAgent")
+                        "assignedAgent": job.get("assignedAgent"),
+                        "contextId": context.context_id,
+                        "createdAt": datetime.utcnow().isoformat() + 'Z',
+                        "webhookToken": str(uuid.uuid4())  # Generate token for webhook auth
                     }
                 }
                 data_parts.append(Part(
@@ -92,21 +96,21 @@ class TaskAgentExecutor(AgentExecutor):
             # Combine all parts into single message
             all_parts = [text_part] + data_parts
 
-            # Create and enqueue the response message
-            from a2a.server.events import MessageEvent
+            # Create and enqueue the response message using A2A-compliant format
             response_message = new_agent_text_message(
                 f"Created {len(jobs)} tasks successfully. The frontend will now create a canvas to track their progress."
             )
 
-            # Replace the message parts with our structured data
+            # Replace the message parts with our structured task data
             response_message.parts = all_parts
 
             await event_queue.enqueue_event(response_message)
 
-            print(f"[TaskAgent] Successfully generated {len(jobs)} tasks - client will store them")
+            print(f"[TaskAgent] ✅ Successfully generated {len(jobs)} A2A-compliant tasks")
+            print(f"[TaskAgent] 📋 Task IDs: {[job.get('id', 'unknown') for job in jobs]}")
 
         except Exception as e:
-            print(f"[TaskAgent] Error generating tasks: {e}")
+            print(f"[TaskAgent] ❌ Error generating tasks: {e}")
             raise
 
     async def _send_task_webhooks(self, context: RequestContext, jobs: List[Dict]) -> None:
@@ -205,7 +209,7 @@ class TaskAgentExecutor(AgentExecutor):
 
         try:
             # Generate sample jobs based on user message
-            jobs = self._generate_jobs(user_message)
+            jobs = await self._generate_jobs(user_message)
 
             # Return jobs in response for client to handle storage
             # Webhooks are only used for execution updates, not initial creation
@@ -252,7 +256,7 @@ class TaskAgentExecutor(AgentExecutor):
             self._call_webhook(webhook_url, webhook_token, initial_task_data, document_id)
 
             # Simulate job execution
-            jobs = self._generate_jobs("Execute sample jobs")  # In real implementation, get from database
+            jobs = await self._generate_jobs("Execute sample jobs")  # In real implementation, get from database
 
             for i, job in enumerate(jobs):
                 # Send job start webhook
@@ -353,7 +357,10 @@ class TaskAgentExecutor(AgentExecutor):
             }
 
             print(f"[Webhook] Sending notification for task {task_data['id']} to {url}")
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            
+            # Use httpx with synchronous client
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(url, json=payload, headers=headers)
 
             if response.status_code == 204:
                 print(f"[Webhook] Successfully notified for task {task_data['id']}")
