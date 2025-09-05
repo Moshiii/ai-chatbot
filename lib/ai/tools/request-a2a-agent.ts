@@ -434,6 +434,9 @@ The tool will communicate with an external A2A-compliant agent that specializes 
           transient: true,
         });
         console.log('[A2A Tool] 🎯 Canvas artifact creation flow completed');
+        console.log(
+          '[A2A Tool] 🔍 Expected: Canvas document handler should be called next by AI SDK',
+        );
 
         return {
           id: canvasDocument.id,
