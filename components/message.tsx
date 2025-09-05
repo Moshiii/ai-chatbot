@@ -310,6 +310,84 @@ const PurePreviewMessage = ({
                   );
                 }
               }
+
+              if (type === 'tool-requestA2AAgent') {
+                const { toolCallId, state } = part;
+
+                if (state === 'input-available') {
+                  const { input } = part;
+                  return (
+                    <div key={`a2a-input-${toolCallId}`}>
+                      <div className="bg-muted/50 border rounded-xl p-4 w-fit max-w-2xl">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="size-4 bg-purple-500 rounded animate-pulse" />
+                          <span className="text-sm font-medium">
+                            A2A Agent Planning
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Requesting specialized agents for:{' '}
+                          {input.userRequirements}
+                        </p>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Priority: {input.urgency || 'medium'}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (state === 'output-available') {
+                  const { output } = part;
+
+                  if ('error' in output) {
+                    return (
+                      <div
+                        key={`a2a-error-${toolCallId}`}
+                        className="text-red-500 p-2 border rounded"
+                      >
+                        Error: {String(output.error)}
+                      </div>
+                    );
+                  }
+
+                  // Display Canvas artifact as clickable document
+                  if (output.kind === 'canvas') {
+                    return (
+                      <div key={`a2a-canvas-output-${toolCallId}`}>
+                        <DocumentToolResult
+                          type="create"
+                          result={{
+                            id: output.id,
+                            title: output.title,
+                            kind: output.kind,
+                          }}
+                          isReadonly={isReadonly}
+                        />
+                      </div>
+                    );
+                  }
+
+                  // Handle other A2A outputs
+                  return (
+                    <div
+                      key={`a2a-output-${toolCallId}`}
+                      className="bg-green-50 border border-green-200 rounded-xl p-4 w-fit max-w-2xl"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="size-4 bg-green-500 rounded" />
+                        <span className="text-sm font-medium">
+                          A2A Task Completed
+                        </span>
+                      </div>
+                      <p className="text-sm">
+                        {output.content ||
+                          `Created ${output.taskCount || 0} tasks`}
+                      </p>
+                    </div>
+                  );
+                }
+              }
             })}
 
             {/* Canvas preview for messages that reference canvas documents */}
