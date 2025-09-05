@@ -89,8 +89,8 @@ class TaskAgentExecutor(AgentExecutor):
             # Create data parts for each task in A2A-compliant format
             data_parts = []
             for i, job in enumerate(jobs):
-                # Ensure job has proper ID
-                job_id = job.get("id") or f"task-{str(uuid.uuid4())}"
+                # Generate proper UUID for each task instead of hardcoded job-X
+                job_id = str(uuid.uuid4())
                 
                 # A2A-compliant task data structure that matches our extraction logic
                 task_data = {
@@ -179,8 +179,8 @@ class TaskAgentExecutor(AgentExecutor):
             # Create data parts for each task in A2A-compliant format
             data_parts = []
             for i, job in enumerate(jobs):
-                # Ensure job has proper ID
-                job_id = job.get("id") or f"task-{str(uuid.uuid4())}"
+                # Generate proper UUID for each task instead of hardcoded job-X
+                job_id = str(uuid.uuid4())
                 
                 # A2A-compliant task data structure that matches our extraction logic
                 task_data = {
@@ -535,7 +535,7 @@ Now process this user request:
         """Create jobs for web project based on user requirements"""
         return [
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Frontend Development & UI Design",
                 "description": f"Create responsive user interface for: {user_message}. Implement modern React/Next.js components with TypeScript, responsive design, and accessibility features.",
                 "status": "submitted",
@@ -551,7 +551,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Backend API & Authentication",
                 "description": f"Build secure REST API for: {user_message}. Implement authentication, authorization, data validation, and API documentation.",
                 "status": "submitted",
@@ -567,7 +567,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Database Architecture & Optimization",
                 "description": f"Design scalable database schema for: {user_message}. Create optimized tables, indexes, relationships, and implement data migration strategies.",
                 "status": "submitted",
@@ -583,7 +583,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Testing & Quality Assurance",
                 "description": f"Implement comprehensive testing suite for: {user_message}. Create unit tests, integration tests, E2E tests, and performance monitoring.",
                 "status": "submitted",
@@ -604,7 +604,7 @@ Now process this user request:
         """Create jobs for scraping project"""
         return [
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Web Scraper Development",
                 "description": f"Build robust web scraper for: {user_message}. Implement data extraction, handle anti-bot measures, and ensure reliable data collection.",
                 "status": "submitted",
@@ -620,7 +620,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Data Processing & Storage",
                 "description": f"Process and store scraped data for: {user_message}. Clean data, implement ETL pipeline, and set up data storage solutions.",
                 "status": "submitted",
@@ -641,7 +641,7 @@ Now process this user request:
         """Create jobs for API project"""
         return [
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "API Design & Architecture",
                 "description": f"Design RESTful API for: {user_message}. Create API specification, design endpoints, and plan data models.",
                 "status": "submitted",
@@ -657,7 +657,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "API Implementation & Testing",
                 "description": f"Implement and test API for: {user_message}. Build endpoints, implement authentication, and create comprehensive test suite.",
                 "status": "submitted",
@@ -678,7 +678,7 @@ Now process this user request:
         """Create intelligent generic jobs based on user message analysis"""
         return [
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Requirements Analysis & Planning",
                 "description": f"Analyze and document requirements for: {user_message}. Create detailed project specification, user stories, and technical architecture plan.",
                 "status": "submitted",
@@ -694,7 +694,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Technical Implementation",
                 "description": f"Implement core functionality for: {user_message}. Develop the main features, integrate necessary services, and ensure code quality.",
                 "status": "submitted",
@@ -710,7 +710,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Testing & Deployment",
                 "description": f"Test and deploy solution for: {user_message}. Implement testing strategies, perform quality assurance, and handle production deployment.",
                 "status": "submitted",
@@ -731,7 +731,7 @@ Now process this user request:
         """Create jobs for mobile app development"""
         return [
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Mobile App UI/UX Design",
                 "description": f"Design mobile interface for: {user_message}. Create wireframes, prototypes, and responsive mobile designs following platform guidelines.",
                 "status": "submitted",
@@ -747,7 +747,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Cross-Platform Development",
                 "description": f"Develop mobile application for: {user_message}. Implement features using React Native or Flutter for iOS and Android platforms.",
                 "status": "submitted",
@@ -768,7 +768,7 @@ Now process this user request:
         """Create jobs for AI/ML projects"""
         return [
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Data Analysis & Model Design",
                 "description": f"Design AI/ML solution for: {user_message}. Analyze data requirements, select appropriate algorithms, and design model architecture.",
                 "status": "submitted",
@@ -784,7 +784,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "ML Pipeline & Integration",
                 "description": f"Implement ML pipeline for: {user_message}. Build data processing pipeline, train models, and integrate with production systems.",
                 "status": "submitted",
@@ -805,7 +805,7 @@ Now process this user request:
         """Create jobs for e-commerce projects"""
         return [
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "E-commerce Platform Development",
                 "description": f"Build e-commerce platform for: {user_message}. Implement product catalog, shopping cart, user accounts, and admin dashboard.",
                 "status": "submitted",
@@ -821,7 +821,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Payment & Security Integration",
                 "description": f"Implement secure payment system for: {user_message}. Integrate payment gateways, implement security measures, and ensure PCI compliance.",
                 "status": "submitted",
@@ -842,7 +842,7 @@ Now process this user request:
         """Create jobs for travel planning projects"""
         return [
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Destination Research & Planning",
                 "description": f"Research destinations and create detailed itinerary for: {user_message}. Analyze best locations, seasonal considerations, cultural highlights, and must-see attractions.",
                 "status": "submitted",
@@ -858,7 +858,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Accommodation & Transportation",
                 "description": f"Arrange accommodations and transportation for: {user_message}. Research hotels, book flights, plan local transportation, and optimize travel routes.",
                 "status": "submitted",
@@ -874,7 +874,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Daily Activity Planning",
                 "description": f"Create detailed daily activities and experiences for: {user_message}. Plan sightseeing tours, cultural experiences, dining recommendations, and leisure activities.",
                 "status": "submitted",
@@ -890,7 +890,7 @@ Now process this user request:
                 }
             },
             {
-                "id": f"job-{self._next_job_id()}",
+                "id": str(uuid.uuid4()),
                 "title": "Budget & Documentation",
                 "description": f"Manage budget and travel documentation for: {user_message}. Calculate costs, track expenses, handle visa requirements, and prepare travel documents.",
                 "status": "submitted",
@@ -931,11 +931,11 @@ Now process this user request:
 - Deploy to staging"""
     
     def _next_job_id(self) -> int:
-        """Get next job ID"""
+        """Deprecated: Now using UUIDs for task IDs"""
         self.job_counter += 1
         return self.job_counter
     
     def _next_agent_id(self) -> int:
-        """Get next agent ID"""
+        """Get next agent ID for agent assignment"""
         self.agent_counter += 1
         return self.agent_counter
