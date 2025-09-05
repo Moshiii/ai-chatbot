@@ -16,9 +16,12 @@ export type TaskState =
 export interface AssignedAgent {
   id: string;
   name: string;
+  description?: string;
   capabilities: string[];
   pricingUsdt?: number;
   walletAddress?: string;
+  rating?: number;
+  completedTasks?: number;
 }
 
 export interface TaskResultData {

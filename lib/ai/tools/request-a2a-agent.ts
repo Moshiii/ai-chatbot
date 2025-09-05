@@ -456,6 +456,17 @@ The tool will communicate with an external A2A-compliant agent that specializes 
         }
 
         // Step 8: Complete the artifact creation flow
+        // ✅ CRITICAL FIX: Explicitly stream the artifact content to AI SDK
+        console.log(
+          '[A2A Tool] ➡️  Writing artifact content:',
+          canvasArtifactContent,
+        );
+        dataStream.write({
+          type: 'data-content',
+          data: canvasArtifactContent, // The document ID returned by Canvas handler
+          transient: false, // This needs to persist as artifact content
+        });
+
         console.log(
           '[A2A Tool] ➡️  Writing data-finish (completing artifact creation)',
         );
