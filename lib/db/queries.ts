@@ -343,13 +343,16 @@ export async function saveDocument({
       .limit(1);
 
     if (existing.length > 0) {
-      // Update existing document
+      // Update existing document while preserving taskIds
+      const existingDoc = existing[0];
       return await db
         .update(document)
         .set({
           title,
           content,
           kind,
+          // Preserve existing taskIds to avoid losing pre-linked tasks
+          taskIds: existingDoc.taskIds,
         })
         .where(eq(document.id, id))
         .returning();

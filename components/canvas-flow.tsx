@@ -595,16 +595,10 @@ export function CanvasFlow({
     nodePositionsRef.current.set(node.id, node.position);
   }, []);
 
-  // Update nodes and edges when tasks, agents, responses, and summary change during streaming
+  // Update nodes and edges when tasks, agents, responses change
   useEffect(() => {
-    // eslint-disable-line react-hooks/exhaustive-deps
     const newNodes: Node[] = [];
-
-    // Clear existing edges to prevent conflicts
-    console.log(
-      'Current edges before clearing:',
-      edges.map((edge) => edge.id),
-    );
+    const newEdges: Edge[] = [];
 
     // Add Task Decomposition title node
     newNodes.push({
@@ -693,11 +687,6 @@ export function CanvasFlow({
       });
     }
 
-    setNodes(newNodes);
-
-    // Create edges connecting tasks to agents
-    const newEdges: Edge[] = [];
-
     // Create task chain: title -> task1 -> task2 -> task3 -> task4 (vertical)
     if (tasks.length > 0) {
       // Connect title to first task
@@ -730,12 +719,10 @@ export function CanvasFlow({
           type: 'default',
           style: STYLES.EDGES.TASK_TO_SUMMARY,
         });
-        console.log('Created last task to summary edge:', `ts-${lastTaskId}`);
       }
     }
 
     // Create task-agent connections for associated agents
-    // Filter out duplicate agents by ID to prevent edge conflicts
     const uniqueAgents = agents.filter(
       (agent, index, self) =>
         index === self.findIndex((a) => a.id === agent.id),
@@ -752,7 +739,6 @@ export function CanvasFlow({
 
         if (taskNodeExists && agentNodeExists) {
           const edgeId = `ta-${agent.taskId}-${agent.id}`;
-          // Check if this edge already exists to prevent duplicates
           const edgeExists = newEdges.some((edge) => edge.id === edgeId);
 
           if (!edgeExists) {
@@ -765,22 +751,12 @@ export function CanvasFlow({
               type: 'default',
               style: STYLES.EDGES.TASK_TO_AGENT,
             });
-            console.log(
-              'Created task-agent edge:',
-              edgeId,
-              'for agent:',
-              agent.id,
-              'task:',
-              agent.taskId,
-            );
-          } else {
-            console.log('Skipping duplicate task-agent edge:', edgeId);
           }
         }
       }
     });
 
-    // Connect agents to their responses horizontally
+    // Connect agents to their responses
     responses.forEach((response) => {
       const agentNodeExists = newNodes.some(
         (n) => n.id === `agent-${response.agentId}`,
@@ -791,7 +767,6 @@ export function CanvasFlow({
 
       if (agentNodeExists && responseNodeExists) {
         const edgeId = `ar-${response.agentId}-${response.id}`;
-        // Check if this edge already exists to prevent duplicates
         const edgeExists = newEdges.some((edge) => edge.id === edgeId);
 
         if (!edgeExists) {
@@ -804,42 +779,18 @@ export function CanvasFlow({
             type: 'default',
             style: STYLES.EDGES.AGENT_TO_RESPONSE,
           });
-          console.log('Created horizontal agent-response edge:', edgeId);
         }
-      } else {
-        console.log('Skipping response edge - nodes not ready:', {
-          agentNodeExists,
-          responseNodeExists,
-          responseId: response.id,
-        });
       }
     });
 
-    // Note: We no longer auto-connect responses to summary
-    // The summary will be connected to the last task automatically
-
-    console.log('Total edges created:', newEdges.length);
-    console.log(
-      'All edge IDs:',
-      newEdges.map((edge) => edge.id),
-    );
+    // Update both nodes and edges atomically to prevent flickering
+    setNodes(newNodes);
     setEdges(newEdges);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- edges intentionally excluded to prevent infinite loops
-  }, [
-    tasks,
-    agents,
-    responses,
-    summary,
-    onSummarize,
-    setNodes,
-    setEdges,
-    isGenerating,
-    // Note: 'edges' is intentionally excluded to prevent infinite loops
-  ]);
+  }, [tasks, agents, responses, summary, onSummarize, isGenerating]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+    [],
   );
 
   return (

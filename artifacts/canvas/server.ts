@@ -24,9 +24,9 @@ export const canvasDocumentHandler = createDocumentHandler({
       hasDataStream: !!dataStream,
     });
 
-    // Initialize empty canvas structure
+    // Initialize canvas structure
     const initialData = {
-      taskId: id, // Use the document ID (UUID) as the initial task ID
+      taskId: id,
       tasks: [],
       agents: [],
       responses: [],
@@ -39,23 +39,19 @@ export const canvasDocumentHandler = createDocumentHandler({
       data: JSON.stringify({
         status: 'canvas-ready',
         canvasId: id,
-        message: `Canvas "${title}" created. Ready for task data.`,
+        message: `Canvas "${title}" created. Task data will be loaded from database.`,
       }),
       transient: true,
     });
 
     console.log(
-      `[Canvas Handler] ✅ Canvas ${id} initialized with empty structure`,
+      `[Canvas Handler] ✅ Canvas ${id} initialized, taskIds preserved by saveDocument`,
     );
 
-    // ✅ CRITICAL FIX: Return document ID as content for Canvas artifact client
-    // The Canvas client expects document ID in content to fetch document data
+    // Return document ID as content for Canvas artifact client
     const returnValue = id;
     console.log(
       `[Canvas Handler] 🎯 RETURNING document ID as artifact content: "${returnValue}"`,
-    );
-    console.log(
-      `[Canvas Handler] 🎯 Return value type: ${typeof returnValue}, length: ${returnValue.length}`,
     );
     return returnValue;
   },
