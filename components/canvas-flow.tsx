@@ -138,14 +138,17 @@ interface CanvasFlowProps {
   onSummarize: () => void;
   isGenerating?: boolean;
   allAgentsExecuted?: boolean;
+  documentTitle?: string; // Title of the Canvas document
 }
 
 // Custom Task Decomposition Title Node Component with Vertical Handles
 const TaskDecompositionTitleNode = ({
   data,
-}: { data: { isGenerating?: boolean } }) => {
+}: { data: { isGenerating?: boolean; documentTitle?: string } }) => {
+  const displayTitle = data?.documentTitle || 'Task Decomposition';
+
   return (
-    <Card className="w-64 bg-white shadow-lg border-2 border-purple-200 relative">
+    <Card className="w-80 bg-white shadow-lg border-2 border-purple-200 relative">
       {/* Output handle on the bottom */}
       <Handle
         type="source"
@@ -159,13 +162,13 @@ const TaskDecompositionTitleNode = ({
 
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold text-purple-800">
-            Task Decomposition
+          <CardTitle className="text-sm font-semibold text-purple-800 flex-1 pr-2">
+            {displayTitle}
           </CardTitle>
           {data?.isGenerating && (
             <Badge
               variant="secondary"
-              className="bg-purple-100 text-purple-800 text-xs"
+              className="bg-purple-100 text-purple-800 text-xs shrink-0"
             >
               <ClockIcon className="size-3 mr-1" />
               Generating
@@ -591,6 +594,7 @@ export function CanvasFlow({
   onSummarize,
   isGenerating = false,
   allAgentsExecuted = false,
+  documentTitle,
 }: CanvasFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -667,7 +671,7 @@ export function CanvasFlow({
       position:
         nodePositionsRef.current.get('task-decomposition-title') ||
         LAYOUT.INITIAL.TITLE,
-      data: { isGenerating },
+      data: { isGenerating, documentTitle },
     });
 
     // Add individual Task nodes in a vertical chain with proper spacing for edge visibility
@@ -846,7 +850,15 @@ export function CanvasFlow({
     // Update both nodes and edges atomically to prevent flickering
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [tasks, agents, responses, summary, onSummarize, isGenerating]);
+  }, [
+    tasks,
+    agents,
+    responses,
+    summary,
+    onSummarize,
+    isGenerating,
+    documentTitle,
+  ]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),

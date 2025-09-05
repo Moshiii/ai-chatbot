@@ -145,10 +145,13 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
   // Extract data for CanvasFlow
   const tasks = canvasData.tasks || [];
   const agents = canvasData.agents || [];
+  const documentTitle =
+    canvasData.title || canvasData.documentId || 'Task Canvas';
 
   console.log('[Canvas Debug] 🎨 Rendering Canvas with data:', {
     taskCount: tasks.length,
     agentCount: agents.length,
+    documentTitle: documentTitle,
     tasksPreview: tasks
       .slice(0, 2)
       .map((t) => ({ id: t.id, title: t.title, status: t.status })),
@@ -225,6 +228,7 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
           onSummarize={handleSummarize}
           isGenerating={status === 'streaming' && tasks.length === 0}
           allAgentsExecuted={mockResponses.length === tasks.length}
+          documentTitle={documentTitle}
         />
       </div>
     </div>
