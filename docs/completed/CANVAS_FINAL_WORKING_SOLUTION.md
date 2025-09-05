@@ -10,18 +10,33 @@
 
 ### AI SDK Artifact Creation Flow Requirements
 
-The AI SDK requires this exact sequence for artifact creation:
+```mermaid
+sequenceDiagram
+    participant A2A as A2A Tool
+    participant SDK as AI SDK
+    participant Handler as Canvas Handler
+    participant Artifact as Canvas Artifact
+    participant UI as Canvas Component
 
-```
-1. data-kind: 'canvas'     → Signals Canvas artifact creation
-2. data-id: documentId     → Sets document ID
-3. data-title: title       → Sets title
-4. data-clear: null        → Clears existing content
-5. [REQUIRED] Document Handler onCreateDocument() → Must exist and stream content
-6. data-finish: null       → Completes artifact creation
+    A2A->>SDK: 1. data-kind: 'canvas'
+    A2A->>SDK: 2. data-id: documentId
+    A2A->>SDK: 3. data-title: title
+    A2A->>SDK: 4. data-clear: null
+
+    Note over A2A,Handler: Critical Step - Handler Must Exist!
+    SDK->>Handler: 5. onCreateDocument()
+    Handler->>Handler: Find global.canvasTaskData
+    Handler->>SDK: 6. data-textDelta (task JSON)
+
+    A2A->>SDK: 7. data-finish: null
+    SDK->>Artifact: onStreamPart(data-textDelta)
+    Artifact->>Artifact: setArtifact(content: JSON)
+    Artifact->>UI: Render with parsed tasks
+
+    Note over UI: ✅ Tasks display immediately
 ```
 
-**The Issue**: I had deleted the Canvas server handler, so step 5 failed silently.
+**The Issue**: I had deleted the Canvas server handler, so steps 5-6 failed silently.
 
 ## Final Working Architecture
 

@@ -23,18 +23,70 @@ The current architecture violates AI SDK v5 principles by:
 
 ## Solution Architecture
 
-### New Simplified Flow
+### Complete System Architecture
 
 ```mermaid
 graph TD
-    A[User Request] --> B[A2A Tool]
-    B --> C[Create Tasks in Database]
-    B --> D[Create Canvas Document in Database]
-    B --> E[Return Task Data Directly to Canvas Artifact]
-    E --> F[Canvas Renders Tasks Immediately]
+    subgraph "User Interaction Layer"
+        A[User Request] --> B[Chat Interface]
+        B --> C[A2A Tool Invocation]
+    end
 
-    style E fill:#e8f5e8
-    style F fill:#e8f5e8
+    subgraph "A2A Tool Processing"
+        C --> D[External A2A Agent Call]
+        D --> E[Receive Task Decomposition]
+        E --> F[Create Tasks in Database]
+        E --> G[Transform Task Data for UI]
+    end
+
+    subgraph "Canvas Artifact Creation"
+        G --> H[Store in global.canvasTaskData]
+        H --> I[Signal Canvas Creation to AI SDK]
+        I --> J[AI SDK Calls Canvas Handler]
+        J --> K[Canvas Handler Streams Task Data]
+        K --> L[Canvas Artifact onStreamPart]
+        L --> M[setArtifact with JSON Content]
+    end
+
+    subgraph "UI Rendering"
+        M --> N[Canvas Component]
+        N --> O[Parse JSON Task Data]
+        O --> P[CanvasFlow Visual Interface]
+        P --> Q[Task Nodes & Agent Connections]
+    end
+
+    subgraph "Chat Integration"
+        M --> R[DocumentToolResult in Chat]
+        R --> S[Clickable Artifact Button]
+        S --> T[Saved in Chat History]
+    end
+
+    subgraph "Persistence & Reopening"
+        F --> U[Database Storage]
+        U --> V[Document Persistence]
+        T --> W[User Clicks Later]
+        W --> X[onUpdateDocument Loads Content]
+        X --> Y[Reopen Canvas with Tasks]
+    end
+
+    style A fill:#e3f2fd
+    style K fill:#e8f5e8
+    style M fill:#e8f5e8
+    style Q fill:#4caf50
+    style S fill:#f3e5f5
+    style U fill:#f5f5f5
+```
+
+### Simplified Data Flow
+
+```mermaid
+graph LR
+    A[User Request] --> B[A2A Tool]
+    B --> C[Canvas Handler]
+    C --> D[Canvas Artifact]
+    D --> E[Render Tasks]
+
+    style E fill:#4caf50
 ```
 
 ### Core Principles
@@ -46,43 +98,147 @@ graph TD
 
 ## Technical Design
 
-### 1. A2A Tool Changes
+### Complete Implementation Flow
 
-```typescript
-// Simplified A2A tool return
-return {
-  content: JSON.stringify({
-    tasks: transformedTasks,
-    agents: extractedAgents,
-    documentId: canvasDocumentId,
-  }),
-  title: canvasTitle,
-  kind: "canvas",
-};
+```mermaid
+flowchart TD
+    subgraph "External Agent Integration"
+        A[User Request] --> B[A2A Tool]
+        B --> C[External A2A Agent API]
+        C --> D[Task Decomposition Response]
+    end
+
+    subgraph "Data Processing"
+        D --> E[Extract Tasks from Response]
+        E --> F[Transform to Database Format]
+        F --> G[Store Tasks in Database]
+        E --> H[Transform to UI Format]
+        H --> I[Prepare Canvas Data JSON]
+    end
+
+    subgraph "AI SDK Artifact Creation Flow"
+        I --> J[Store in global.canvasTaskData]
+        J --> K["Signal: data-kind: 'canvas'"]
+        K --> L["Signal: data-id, data-title, data-clear"]
+        L --> M[AI SDK Invokes Canvas Handler]
+        M --> N[Canvas Handler Finds Global Data]
+        N --> O["Stream: data-textDelta with JSON"]
+        O --> P["Signal: data-finish"]
+    end
+
+    subgraph "Canvas Artifact Processing"
+        O --> Q[Canvas Artifact onStreamPart]
+        Q --> R[Parse JSON Task Data]
+        R --> S[setArtifact with Content]
+        S --> T[Canvas Component Receives Content]
+    end
+
+    subgraph "UI Rendering"
+        T --> U[JSON.parse Canvas Data]
+        U --> V[Extract Tasks & Agents]
+        V --> W[CanvasFlow Component]
+        W --> X[ReactFlow Visual Interface]
+        X --> Y[Task Nodes, Agent Cards, Connections]
+    end
+
+    subgraph "Chat History Integration"
+        S --> Z[DocumentToolResult in Chat]
+        Z --> AA[Clickable Artifact Button]
+        AA --> BB[Saved in Chat History]
+        BB --> CC[User Can Reopen Later]
+    end
+
+    style A fill:#e3f2fd
+    style G fill:#fff3e0
+    style O fill:#e8f5e8
+    style S fill:#e8f5e8
+    style Y fill:#4caf50
+    style AA fill:#f3e5f5
 ```
 
-### 2. Canvas Artifact Changes
+### 1. A2A Tool Implementation
 
 ```typescript
-// Simple artifact that receives all data
-export const canvasArtifact = new Artifact<'canvas'>({
-  kind: 'canvas',
-  content: ({ content }) => {
-    const canvasData = JSON.parse(content);
-    return <CanvasFlow
-      tasks={canvasData.tasks}
-      agents={canvasData.agents}
-    />;
-  }
+// Data preparation and Canvas creation
+const canvasData = {
+  tasks: createdTasks.map((task) => ({
+    id: task.id,
+    title: task.result?.title,
+    description: task.result?.description,
+    status: task.status === "submitted" ? "pending" : task.status,
+    assignedAgent: task.result?.assignedAgent,
+  })),
+  documentId: documentId,
+  title: title || "Task Canvas",
+};
+
+// Store for Canvas handler access
+global.canvasTaskData = canvasData;
+
+// Standard AI SDK artifact signals
+dataStream.write({ type: "data-kind", data: "canvas" });
+dataStream.write({ type: "data-id", data: documentId });
+dataStream.write({ type: "data-title", data: title });
+dataStream.write({ type: "data-clear", data: null });
+
+// AI SDK automatically calls Canvas handler
+await canvasHandler.onCreateDocument({ id, title, dataStream, session });
+
+dataStream.write({ type: "data-finish", data: null });
+```
+
+### 2. Canvas Handler Implementation
+
+```typescript
+export const canvasDocumentHandler = createDocumentHandler({
+  kind: "canvas",
+  onCreateDocument: async ({ id, title, dataStream }) => {
+    const canvasData = global.canvasTaskData;
+
+    if (canvasData?.tasks?.length > 0) {
+      const canvasContent = JSON.stringify(canvasData);
+
+      // Stream Canvas data to artifact
+      dataStream.write({
+        type: "data-textDelta",
+        data: canvasContent,
+        transient: false,
+      });
+
+      global.canvasTaskData = null;
+      return canvasContent;
+    }
+
+    return JSON.stringify({ tasks: [], documentId: id, title });
+  },
 });
 ```
 
-### 3. Canvas Component Changes
+### 3. Canvas Artifact Implementation
 
-- **Remove**: useSWR data fetching
-- **Remove**: Complex streaming metadata
-- **Remove**: Document ID resolution logic
-- **Add**: Simple props-based rendering
+```typescript
+export const canvasArtifact = new Artifact<'canvas'>({
+  kind: 'canvas',
+  onStreamPart: ({ streamPart, setArtifact }) => {
+    if (streamPart.type === 'data-textDelta') {
+      const canvasData = JSON.parse(streamPart.data);
+
+      if (canvasData.tasks?.length > 0) {
+        setArtifact(draft => ({
+          ...draft,
+          content: streamPart.data, // JSON task data
+          isVisible: true,
+          status: 'streaming',
+        }));
+      }
+    }
+  },
+  content: ({ content }) => {
+    const canvasData = JSON.parse(content || '{}');
+    return <CanvasFlow tasks={canvasData.tasks} />;
+  }
+});
+```
 
 ## Implementation Plan
 

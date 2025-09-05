@@ -47,16 +47,69 @@ const CanvasContent = ({ content }) => {
 
 ## Architecture Changes
 
-### Before (Broken Complex)
+### Architecture Transformation
 
-```
-A2A Tool → Canvas Handler → Document ID → AI SDK → Canvas → useSWR → API → Fetch Tasks → Render
+```mermaid
+graph TD
+    subgraph "❌ Before: Broken Complex Flow"
+        B1[A2A Tool] --> B2[Canvas Handler]
+        B2 --> B3[Return Document ID]
+        B3 --> B4[AI SDK]
+        B4 --> B5[Canvas Component]
+        B5 --> B6[useSWR Hook]
+        B6 --> B7[API Call]
+        B7 --> B8[Database Query]
+        B8 --> B9[Task Data]
+        B9 --> B10[Race Conditions]
+        B10 --> B11[❌ Canvas Initializing Forever]
+
+        style B11 fill:#ffebee
+        style B10 fill:#ffebee
+    end
+
+    subgraph "✅ After: Simple Working Flow"
+        A1[A2A Tool] --> A2[Prepare Canvas Data]
+        A2 --> A3[Canvas Handler]
+        A3 --> A4[Stream data-textDelta]
+        A4 --> A5[Canvas Artifact]
+        A5 --> A6[Parse JSON Content]
+        A6 --> A7[✅ Render Tasks Immediately]
+
+        style A7 fill:#4caf50
+        style A4 fill:#e8f5e8
+        style A5 fill:#e8f5e8
+    end
 ```
 
-### After (Simple Working)
+### Implementation Pattern Comparison
 
-```
-A2A Tool → data-canvasData → Canvas Artifact → JSON Content → Render Immediately
+```mermaid
+graph LR
+    subgraph "AI SDK v5 Standard Pattern"
+        P1[Tool] --> P2[Handler]
+        P2 --> P3[Stream Data]
+        P3 --> P4[Artifact]
+        P4 --> P5[Component]
+
+        style P1 fill:#e3f2fd
+        style P2 fill:#e8f5e8
+        style P3 fill:#e8f5e8
+        style P4 fill:#e8f5e8
+        style P5 fill:#4caf50
+    end
+
+    subgraph "Canvas Implementation"
+        C1[A2A Tool] --> C2[Canvas Handler]
+        C2 --> C3[data-textDelta]
+        C3 --> C4[Canvas Artifact]
+        C4 --> C5[CanvasFlow]
+
+        style C1 fill:#e3f2fd
+        style C2 fill:#e8f5e8
+        style C3 fill:#e8f5e8
+        style C4 fill:#e8f5e8
+        style C5 fill:#4caf50
+    end
 ```
 
 ## Files Modified
