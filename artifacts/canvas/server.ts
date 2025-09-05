@@ -11,95 +11,67 @@ export const canvasDocumentHandler = createDocumentHandler({
     id,
     title,
     dataStream,
+    session,
   }: CreateDocumentCallbackProps) => {
-    console.log(
-      `[Canvas Handler] 🚀 onCreateDocument CALLED: ${title} with ID: ${id}`,
-    );
-    console.log(
-      `[Canvas Handler] 📋 Call timestamp: ${new Date().toISOString()}`,
-    );
-    console.log(`[Canvas Handler] 📦 Params received:`, {
-      id,
-      title,
-      hasDataStream: !!dataStream,
-    });
+    console.log(`[Canvas Handler] 🚀 Creating Canvas: ${title} (${id})`);
 
-    // Initialize canvas structure
-    const initialData = {
-      taskId: id,
-      tasks: [],
-      agents: [],
-      responses: [],
-      summary: null,
-    };
+    // Check if task data is available from the A2A tool
+    const canvasData = (global as any).canvasTaskData;
 
-    // Signal that canvas is ready and provide helpful message
-    dataStream.write({
-      type: 'data-textDelta',
-      data: JSON.stringify({
-        status: 'canvas-ready',
-        canvasId: id,
-        message: `Canvas "${title}" created. Task data will be loaded from database.`,
-      }),
-      transient: true,
-    });
+    if (canvasData?.tasks?.length > 0) {
+      console.log(`[Canvas Handler] ✅ Found task data, streaming to Canvas:`, {
+        taskCount: canvasData.tasks.length,
+        documentId: canvasData.documentId,
+      });
 
-    console.log(
-      `[Canvas Handler] ✅ Canvas ${id} initialized, taskIds preserved by saveDocument`,
-    );
+      const canvasContent = JSON.stringify(canvasData);
 
-    // Return document ID as content for Canvas artifact client
-    const returnValue = id;
-    console.log(
-      `[Canvas Handler] 🎯 RETURNING document ID as artifact content: "${returnValue}"`,
-    );
-    return returnValue;
-  },
-  onUpdateDocument: async ({
-    document,
-    description,
-    dataStream,
-  }: UpdateDocumentCallbackProps) => {
-    console.log(`[Canvas Handler] 📝 Updating canvas artifact: ${document.id}`);
+      // Stream the Canvas data with task information
+      dataStream.write({
+        type: 'data-textDelta',
+        data: canvasContent,
+        transient: false, // Content should persist
+      });
 
-    // Load existing canvas data when document is opened
-    if (document.content) {
-      try {
-        const existingData = JSON.parse(document.content);
+      // Clear the global data after use
+      (global as any).canvasTaskData = null;
 
-        // If we have saved data, stream it to the client to load into metadata
-        if (existingData.tasks && existingData.tasks.length > 0) {
-          console.log('[Canvas Handler] Loading saved canvas data:', {
-            taskId: existingData.taskId,
-            taskCount: existingData.tasks.length,
-            agentCount: existingData.agents?.length || 0,
-            responseCount: existingData.responses?.length || 0,
-            hasSummary: !!existingData.summary,
-          });
+      return canvasContent;
+    } else {
+      console.log(
+        `[Canvas Handler] ⚠️ No task data found, creating empty Canvas`,
+      );
 
-          // Stream the saved data to the client
-          dataStream.write({
-            type: 'data-textDelta',
-            data: JSON.stringify({
-              type: 'load-saved-data',
-              ...existingData,
-            }),
-            transient: true,
-          });
-        }
-      } catch (error) {
-        console.error(
-          '[Canvas Handler] Failed to parse saved canvas data:',
-          error,
-        );
-      }
+      const placeholder = JSON.stringify({
+        tasks: [],
+        documentId: id,
+        title: title,
+        status: 'waiting-for-tasks',
+      });
+
+      dataStream.write({
+        type: 'data-textDelta',
+        data: placeholder,
+        transient: true,
+      });
+
+      return placeholder;
     }
+  },
 
-    // ✅ CRITICAL FIX: Return document ID as content for Canvas artifact client
-    // The Canvas client expects document ID in content to fetch document data
+  onUpdateDocument: async ({ document }: UpdateDocumentCallbackProps) => {
     console.log(
-      `[Canvas Handler] 📤 Returning document ID as artifact content: ${document.id}`,
+      `[Canvas Handler] 📖 Loading existing Canvas: ${document.title} (${document.id})`,
     );
-    return document.id;
+
+    // Return existing content for reopened Canvas documents
+    return (
+      document.content ||
+      JSON.stringify({
+        tasks: [],
+        documentId: document.id,
+        title: document.title,
+      })
+    );
   },
 });

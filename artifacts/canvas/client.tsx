@@ -1,7 +1,6 @@
 import { Artifact } from '@/components/create-artifact';
 import { CanvasFlow } from '../../components/canvas-flow';
-import { DocumentSkeleton } from '@/components/document-skeleton';
-import React, { useEffect } from 'react';
+import React from 'react';
 
 import {
   ClockRewind,
@@ -11,18 +10,46 @@ import {
   RedoIcon,
   UndoIcon,
 } from '@/components/icons';
-import type { Suggestion, Document } from '@/lib/db/schema';
 import { toast } from 'sonner';
-import useSWR from 'swr';
-import { fetcher } from '@/lib/utils';
-import { transformTaskStatusToUI } from '@/lib/types';
-import type { TaskStatusResponse } from '@/lib/types/tasks';
 
-// Canvas Content Component - simplified and focused
+// Canvas data structure received from tools
+interface CanvasData {
+  tasks: Array<{
+    id: string;
+    title: string;
+    description: string;
+    status: 'pending' | 'in-progress' | 'completed' | 'recruiting';
+    assignedAgent?: {
+      id: string;
+      name: string;
+      description: string;
+      capabilities: string[];
+      pricingUsdt?: number;
+      walletAddress?: string;
+      rating?: number;
+      completedTasks?: number;
+    };
+  }>;
+  agents?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    capabilities: string[];
+    taskId: string;
+    pricingUsdt?: number;
+    walletAddress?: string;
+    rating?: number;
+    completedTasks?: number;
+  }>;
+  documentId?: string;
+  title?: string;
+}
+
+// Simple Canvas Content Component
 interface CanvasContentProps {
+  content: string;
   mode: string;
   status: string;
-  content: string;
   isCurrentVersion: boolean;
   currentVersionIndex: number;
   onSaveContent: (updatedContent: string, debounce: boolean) => void;
@@ -31,126 +58,71 @@ interface CanvasContentProps {
 }
 
 const CanvasContent: React.FC<CanvasContentProps> = ({
+  content,
   mode,
   status,
-  content,
   isCurrentVersion,
   currentVersionIndex,
   onSaveContent,
   getDocumentContentById,
   isLoading,
 }) => {
-  // Simple document ID resolution - content should be the document ID
-  const documentId = content;
-
-  // Fetch canvas document with more debugging
-  const {
-    data: canvasDocument,
-    isLoading: isDocumentLoading,
-    mutate: mutateDocument,
-  } = useSWR<Document>(
-    documentId && documentId !== 'init'
-      ? `canvas-document-${documentId}`
-      : null,
-    async () => {
-      if (!documentId || documentId === 'init') {
-        return null;
-      }
-      return await fetcher(`/api/document?id=${documentId}`);
-    },
-  );
-
-  // Fetch tasks based on document task IDs
-  const {
-    data: tasksData,
-    isLoading: isTasksLoading,
-    mutate: mutateTasks,
-  } = useSWR<TaskStatusResponse[]>(
-    canvasDocument?.taskIds?.length
-      ? `tasks-data-${canvasDocument.id}-${canvasDocument.taskIds.join(',')}`
-      : null,
-    async () => {
-      const taskIds = canvasDocument?.taskIds || [];
-      if (taskIds.length === 0) {
-        return [];
-      }
-
-      try {
-        const responses = await Promise.all(
-          taskIds.map(async (taskId: string) => {
-            const task: TaskStatusResponse = await fetcher(
-              `/api/tasks/${taskId}`,
-            );
-            return task;
-          }),
-        );
-        return responses.filter(Boolean);
-      } catch (error) {
-        console.error('Error fetching tasks:', error);
-        toast.error('Failed to fetch task details.');
-        return [];
-      }
-    },
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-    },
-  );
-
-  // Auto-retry document fetch if tasks not found
-  useEffect(() => {
-    if (
-      !isLoading &&
-      !isDocumentLoading &&
-      !isTasksLoading &&
-      canvasDocument &&
-      (!canvasDocument.taskIds || canvasDocument.taskIds.length === 0) &&
-      status === 'streaming'
-    ) {
-      const retryTimer = setTimeout(() => {
-        mutateDocument();
-      }, 2000);
-      return () => clearTimeout(retryTimer);
-    }
-  }, [
-    isLoading,
-    isDocumentLoading,
-    isTasksLoading,
-    canvasDocument,
+  // Debug: Log what we actually receive
+  console.log('[Canvas Debug] 🔍 Content received:', {
+    content,
+    contentType: typeof content,
+    contentLength: content?.length || 0,
     status,
-    mutateDocument,
-  ]);
+    isLoading,
+    timestamp: new Date().toISOString(),
+  });
 
-  // Loading states
-  if (isLoading || isDocumentLoading) {
-    return <DocumentSkeleton artifactKind="canvas" />;
-  }
-
-  if (!documentId || documentId === 'init') {
-    // If we're streaming, give it some time for the content to arrive
-    if (status === 'streaming' && !isLoading) {
-      return <DocumentSkeleton artifactKind="canvas" />;
+  // Parse canvas data from content
+  let canvasData: CanvasData;
+  try {
+    canvasData = JSON.parse(content || '{}');
+    console.log('[Canvas Debug] ✅ Successfully parsed canvas data:', {
+      taskCount: canvasData.tasks?.length || 0,
+      hasDocumentId: !!canvasData.documentId,
+      hasTitle: !!canvasData.title,
+      tasks: canvasData.tasks?.map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+      })),
+    });
+  } catch {
+    // If content is not JSON, show initializing state
+    if (status === 'streaming' || isLoading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="text-lg font-semibold text-gray-700">
+              Canvas Loading...
+            </div>
+            <div className="text-sm text-gray-500 mt-2">
+              Generating task visualization
+            </div>
+          </div>
+        </div>
+      );
     }
 
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="text-lg font-semibold text-gray-700">
-            Canvas Initializing
+            No Canvas Data
           </div>
           <div className="text-sm text-gray-500 mt-2">
-            Waiting for document to be created...
+            Unable to load canvas content
           </div>
         </div>
       </div>
     );
   }
 
-  if (isTasksLoading) {
-    return <DocumentSkeleton artifactKind="canvas" />;
-  }
-
-  // Diff mode
+  // Handle diff mode
   if (mode === 'diff') {
     const oldContent = getDocumentContentById(currentVersionIndex - 1);
     const newContent = getDocumentContentById(currentVersionIndex);
@@ -170,67 +142,39 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
     );
   }
 
-  // Transform database tasks to UI format
-  const uiTasks = (tasksData || []).map((task) => ({
-    id: task.id,
-    title: task.title || `Task ${task.id.slice(-8)}`,
-    description:
-      task.description || task.statusMessage || `Status: ${task.status}`,
-    status: transformTaskStatusToUI(task.status),
-  }));
+  // Extract data for CanvasFlow
+  const tasks = canvasData.tasks || [];
+  const agents = canvasData.agents || [];
 
-  // Extract agents from tasks
-  const uiAgents = (tasksData || [])
-    .filter((task) => task.assignedAgent)
-    .map((task) => {
-      const agent = task.assignedAgent;
-      if (!agent) return null;
+  console.log('[Canvas Debug] 🎨 Rendering Canvas with data:', {
+    taskCount: tasks.length,
+    agentCount: agents.length,
+    tasksPreview: tasks
+      .slice(0, 2)
+      .map((t) => ({ id: t.id, title: t.title, status: t.status })),
+  });
 
-      return {
-        id: agent.id || `agent-${task.id}`,
-        name: agent.name || `Agent for ${task.title || 'Task'}`,
-        description: agent.description || 'A2A Agent',
-        capabilities: agent.capabilities || ['task-execution'],
-        taskId: task.id,
-        pricingUsdt: agent.pricingUsdt,
-        walletAddress: agent.walletAddress,
-        rating: agent.rating,
-        completedTasks: agent.completedTasks,
-      };
-    })
-    .filter(Boolean) as Array<{
-    id: string;
-    name: string;
-    description: string;
-    capabilities: string[];
-    taskId: string;
-    pricingUsdt?: number;
-    walletAddress?: string;
-    rating?: number;
-    completedTasks?: number;
-  }>;
-
-  // Mock responses for completed tasks
-  const mockResponses = uiTasks
+  // Create mock responses for completed tasks
+  const mockResponses = tasks
     .filter((task) => task.status === 'completed')
     .map((task) => ({
       id: `response-${task.id}`,
-      agentId: `agent-${task.id}`,
+      agentId: task.assignedAgent?.id || `agent-${task.id}`,
       content: 'Task completed successfully',
       timestamp: new Date(),
     }));
 
   // Handler for executing all agents
   const handleExecuteAllAgents = async () => {
-    if (!tasksData || tasksData.length === 0) {
+    if (tasks.length === 0) {
       toast.warning('No tasks available to execute');
       return;
     }
 
-    toast.info(`Executing ${tasksData.length} tasks...`);
+    toast.info(`Executing ${tasks.length} tasks...`);
 
     try {
-      const executionPromises = tasksData.map(async (task) => {
+      const executionPromises = tasks.map(async (task) => {
         const response = await fetch('/api/agent/execution', {
           method: 'POST',
           headers: {
@@ -251,11 +195,6 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
       });
 
       await Promise.all(executionPromises);
-
-      // Refresh data after execution
-      mutateTasks();
-      mutateDocument();
-
       toast.success('All tasks execution initiated successfully');
     } catch (error) {
       console.error('Error executing tasks:', error);
@@ -265,7 +204,7 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
 
   // Handler for summary generation
   const handleSummarize = () => {
-    if (!mockResponses || mockResponses.length === 0) {
+    if (mockResponses.length === 0) {
       toast.warning('No task responses available to summarize');
       return;
     }
@@ -278,76 +217,65 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
     <div className="flex flex-col h-full">
       <div className="relative size-full">
         <CanvasFlow
-          tasks={uiTasks}
-          agents={uiAgents}
+          tasks={tasks}
+          agents={agents}
           responses={mockResponses}
           summary={null}
           onExecuteAllAgents={handleExecuteAllAgents}
           onSummarize={handleSummarize}
-          isGenerating={
-            status === 'streaming' && uiTasks.length === 0 && !isTasksLoading
-          }
-          allAgentsExecuted={mockResponses.length === uiTasks.length}
+          isGenerating={status === 'streaming' && tasks.length === 0}
+          allAgentsExecuted={mockResponses.length === tasks.length}
         />
       </div>
     </div>
   );
 };
 
-// Simplified Canvas Artifact Metadata
-interface CanvasArtifactMetadata {
-  suggestions: Array<Suggestion>;
-}
-
-export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
+// Simplified Canvas Artifact - no metadata needed
+export const canvasArtifact = new Artifact<'canvas'>({
   kind: 'canvas',
   description:
     'Interactive canvas for task decomposition and agent coordination.',
 
-  initialize: async ({ documentId, setMetadata }) => {
-    // Simple initialization - no complex metadata needed since we use useSWR
-    setMetadata({
-      suggestions: [], // Only keep suggestions for artifact compatibility
+  onStreamPart: ({ streamPart, setArtifact }) => {
+    console.log('[Canvas Artifact] 🔄 Stream received:', {
+      type: streamPart.type,
+      hasData: 'data' in streamPart,
     });
-  },
 
-  onStreamPart: ({ streamPart, setMetadata, setArtifact }) => {
-    // Simplified stream handling - focus only on essential events
-    if (streamPart.type === 'data-suggestion') {
-      try {
-        setMetadata((metadata) => ({
-          ...metadata,
-          suggestions: [...(metadata.suggestions || []), streamPart.data],
-        }));
-      } catch (error) {
-        console.warn('Error handling suggestion stream part:', error);
-      }
-    }
-
+    // Handle Canvas task data from server handler
     if (streamPart.type === 'data-textDelta') {
+      console.log(
+        '[Canvas Artifact] 📥 Received Canvas data:',
+        streamPart.data,
+      );
+
       try {
-        const parsedData = JSON.parse(streamPart.data);
+        const canvasData = JSON.parse(streamPart.data);
 
-        // Handle canvas ready status
-        if (parsedData.status === 'canvas-ready') {
-          toast.success(parsedData.message || 'Canvas created successfully');
-        }
-
-        // Handle canvas tasks linked notification
-        else if (parsedData.type === 'canvas-tasks-linked') {
-          toast.success(
-            parsedData.message ||
-              `Canvas updated with ${parsedData.taskCount} tasks`,
+        if (canvasData.tasks && canvasData.tasks.length > 0) {
+          console.log(
+            '[Canvas Artifact] ✅ Setting Canvas content with tasks:',
+            {
+              taskCount: canvasData.tasks.length,
+              documentId: canvasData.documentId,
+            },
           );
+
+          setArtifact((draftArtifact) => ({
+            ...draftArtifact,
+            content: streamPart.data, // Set the complete JSON task data as content
+            isVisible: true,
+            status: 'streaming',
+          }));
+
+          toast.success(`Canvas created with ${canvasData.tasks.length} tasks`);
+        } else {
+          console.log('[Canvas Artifact] Received placeholder Canvas data');
         }
       } catch (error) {
-        // Non-JSON data, ignore silently
+        console.log('[Canvas Artifact] Error parsing Canvas data:', error);
       }
-
-      setArtifact((draftArtifact) => ({
-        ...draftArtifact,
-        status: 'streaming',
-      }));
     }
   },
 

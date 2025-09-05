@@ -367,18 +367,32 @@ The tool will communicate with an external A2A-compliant agent that specializes 
           transient: true,
         });
 
-        // Step 5: Create canvas document AFTER signaling artifact creation
-        console.log('[A2A Tool] Creating canvas document with stored tasks');
+        // Step 5: Prepare Canvas data and let Canvas handler stream it
+        console.log('[A2A Tool] Preparing Canvas data for handler');
 
-        // Document will be created by the Canvas document handler
-        const canvasDocument = {
-          id: documentId,
+        // Transform tasks for Canvas artifact
+        const canvasData = {
+          tasks: createdTasks.map((task) => ({
+            id: task.id,
+            title: task.result?.title || `Task ${task.id.slice(-8)}`,
+            description: task.result?.description || `Status: ${task.status}`,
+            status: task.status === 'submitted' ? 'pending' : task.status,
+            assignedAgent: task.result?.assignedAgent,
+          })),
+          documentId: documentId,
           title: title || 'Task Canvas',
-          kind: 'canvas' as const,
         };
 
-        // Step 6: Invoke Canvas document handler (required for AI SDK)
-        console.log('[A2A Tool] 🔧 Invoking Canvas document handler manually');
+        // Store task data temporarily for Canvas handler to access
+        (global as any).canvasTaskData = canvasData;
+
+        console.log('[A2A Tool] ✅ Canvas data prepared for handler:', {
+          taskCount: canvasData.tasks.length,
+          documentId: documentId,
+        });
+
+        // Step 6: Invoke Canvas document handler to stream task data
+        console.log('[A2A Tool] 🔧 Invoking Canvas document handler');
         const { documentHandlersByArtifactKind } = await import(
           '@/lib/artifacts/server'
         );
@@ -391,19 +405,29 @@ The tool will communicate with an external A2A-compliant agent that specializes 
           throw new Error('Canvas document handler not found');
         }
 
-        const canvasArtifactContent = await canvasHandler.onCreateDocument({
+        const canvasContent = await canvasHandler.onCreateDocument({
           id: documentId,
           title: title || 'Task Canvas',
           dataStream,
           session,
         });
 
-        console.log(
-          '[A2A Tool] ✅ Canvas document handler returned:',
-          canvasArtifactContent,
-        );
+        console.log('[A2A Tool] ✅ Canvas handler completed, content:', {
+          contentLength: canvasContent.length,
+          contentPreview: canvasContent.substring(0, 100),
+        });
 
-        // Step 7: Link tasks to canvas document AFTER document is created
+        // Save canvas document to database for persistence
+        const { saveDocument } = await import('@/lib/db/queries');
+        await saveDocument({
+          id: documentId,
+          title: title || 'Task Canvas',
+          kind: 'canvas',
+          content: canvasContent,
+          userId: session.user.id,
+        });
+
+        // Link tasks to canvas document for persistence (reopening later)
         if (createdTasks.length > 0) {
           const taskIds = createdTasks.map((t) => t.id);
           await updateDocumentTaskIds({
@@ -411,81 +435,27 @@ The tool will communicate with an external A2A-compliant agent that specializes 
             taskIds,
           });
 
-          console.log(
-            '[A2A Tool] ✅ Linked stored tasks to canvas AFTER creation:',
-            {
-              documentId: documentId,
-              taskIds,
-              taskCount: createdTasks.length,
-            },
-          );
-
-          // Signal to Canvas component that taskIds have been updated
-          dataStream.write({
-            type: 'data-textDelta',
-            data: JSON.stringify({
-              type: 'canvas-tasks-linked',
-              documentId: documentId,
-              taskIds: taskIds,
-              taskCount: taskIds.length,
-              message: `Canvas updated with ${taskIds.length} tasks`,
-            }),
-            transient: true,
+          console.log('[A2A Tool] ✅ Canvas saved and linked to database:', {
+            documentId: documentId,
+            taskCount: createdTasks.length,
           });
-
-          // Write task information to dataStream for UI consumption
-          for (const task of createdTasks) {
-            const taskResult =
-              task.result && typeof task.result === 'object'
-                ? (task.result as any)
-                : {};
-            dataStream.write({
-              type: 'data-task',
-              data: {
-                task: {
-                  id: task.id,
-                  contextId: task.contextId,
-                  status: task.status,
-                  title: taskResult.title || 'Task',
-                  description: taskResult.description || '',
-                },
-              },
-              transient: true,
-            });
-          }
         }
 
-        // Step 8: Complete the artifact creation flow
-        // ✅ CRITICAL FIX: Explicitly stream the artifact content to AI SDK
-        console.log(
-          '[A2A Tool] ➡️  Writing artifact content:',
-          canvasArtifactContent,
-        );
-        dataStream.write({
-          type: 'data-content',
-          data: canvasArtifactContent, // The document ID returned by Canvas handler
-          transient: false, // This needs to persist as artifact content
-        });
-
-        console.log(
-          '[A2A Tool] ➡️  Writing data-finish (completing artifact creation)',
-        );
         dataStream.write({
           type: 'data-finish',
           data: null,
           transient: true,
         });
-        console.log('[A2A Tool] 🎯 Canvas artifact creation flow completed');
 
         return {
-          id: canvasDocument.id,
-          title: canvasDocument.title,
-          kind: canvasDocument.kind,
-          content: canvasArtifactContent, // Use the document ID returned by Canvas handler for artifact content
+          id: documentId,
+          title: title || 'Task Canvas',
+          kind: 'canvas' as const,
+          content: canvasContent,
           taskCount: createdTasks.length,
           storedTaskIds: createdTasks.map((t) => t.id),
           contextId: contextId,
-          webhookToken: webhookToken, // Include webhook token for debugging
+          webhookToken: webhookToken,
         };
       } catch (error: any) {
         console.error('[A2A Tool] Error in integrated flow:', error);
