@@ -40,17 +40,6 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
   getDocumentContentById,
   isLoading,
 }) => {
-  // Debug: Log what we receive from the artifact system
-  console.log('[Canvas Debug] 🔍 CanvasContent received props:', {
-    content,
-    contentType: typeof content,
-    contentLength: content?.length || 0,
-    status,
-    mode,
-    isLoading,
-    timestamp: new Date().toISOString(),
-  });
-
   // Simple document ID resolution - content should be the document ID
   const documentId = content;
 
@@ -59,38 +48,17 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
     data: canvasDocument,
     isLoading: isDocumentLoading,
     mutate: mutateDocument,
-    error: documentError,
   } = useSWR<Document>(
     documentId && documentId !== 'init'
       ? `canvas-document-${documentId}`
       : null,
     async () => {
       if (!documentId || documentId === 'init') {
-        console.log(
-          '[Canvas Debug] ❌ Skipping document fetch - no valid documentId',
-        );
         return null;
       }
-      console.log('[Canvas Debug] 🔄 Fetching document with ID:', documentId);
-      const doc = await fetcher(`/api/document?id=${documentId}`);
-      console.log('[Canvas Debug] 📄 Document fetched:', {
-        hasDoc: !!doc,
-        docId: doc?.id,
-        docTitle: doc?.title,
-        taskIds: doc?.taskIds,
-        taskIdsLength: doc?.taskIds?.length || 0,
-      });
-      return doc;
+      return await fetcher(`/api/document?id=${documentId}`);
     },
   );
-
-  console.log('[Canvas Debug] 📊 Document fetch state:', {
-    documentId,
-    isDocumentLoading,
-    hasDocument: !!canvasDocument,
-    documentError: documentError?.message,
-    documentTaskIds: canvasDocument?.taskIds,
-  });
 
   // Fetch tasks based on document task IDs
   const {
@@ -119,6 +87,7 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
         return responses.filter(Boolean);
       } catch (error) {
         console.error('Error fetching tasks:', error);
+        toast.error('Failed to fetch task details.');
         return [];
       }
     },
@@ -160,7 +129,6 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
   if (!documentId || documentId === 'init') {
     // If we're streaming, give it some time for the content to arrive
     if (status === 'streaming' && !isLoading) {
-      console.log('[Canvas Debug] ⏳ Waiting for streaming content...');
       return <DocumentSkeleton artifactKind="canvas" />;
     }
 
@@ -172,10 +140,6 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
           </div>
           <div className="text-sm text-gray-500 mt-2">
             Waiting for document to be created...
-          </div>
-          <div className="text-xs text-gray-400 mt-1">
-            Status: {status} | Content: {content || 'empty'} | Loading:{' '}
-            {String(isLoading)}
           </div>
         </div>
       </div>
@@ -313,13 +277,6 @@ const CanvasContent: React.FC<CanvasContentProps> = ({
   return (
     <div className="flex flex-col h-full">
       <div className="relative size-full">
-        {/* Debug info in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="absolute top-0 right-0 z-50 bg-black/80 text-white text-xs p-2 rounded-bl">
-            Tasks: {uiTasks.length} | Agents: {uiAgents.length} | Status:{' '}
-            {status}
-          </div>
-        )}
         <CanvasFlow
           tasks={uiTasks}
           agents={uiAgents}
