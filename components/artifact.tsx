@@ -110,15 +110,22 @@ function PureArtifact({
       const mostRecentDocument = documents.at(-1);
 
       if (mostRecentDocument) {
+        console.log('[Artifact] 📄 Loading saved document:', {
+          id: mostRecentDocument.id,
+          kind: mostRecentDocument.kind,
+          title: mostRecentDocument.title,
+          hasContent: !!mostRecentDocument.content,
+          contentLength: mostRecentDocument.content?.length || 0,
+          contentPreview:
+            mostRecentDocument.content?.substring(0, 100) || 'none',
+        });
+
         setDocument(mostRecentDocument);
         setCurrentVersionIndex(documents.length - 1);
         setArtifact((currentArtifact) => ({
           ...currentArtifact,
-          // Don't overwrite content for canvas - it uses metadata instead
-          content:
-            currentArtifact.kind === 'canvas'
-              ? currentArtifact.content
-              : (mostRecentDocument.content ?? ''),
+          // Set content from saved document for all artifact types including canvas
+          content: mostRecentDocument.content ?? '',
         }));
       }
     }

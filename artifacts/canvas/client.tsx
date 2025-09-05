@@ -237,29 +237,43 @@ export const canvasArtifact = new Artifact<'canvas'>({
   description:
     'Interactive canvas for task decomposition and agent coordination.',
 
+  initialize: async ({ documentId }) => {
+    console.log(
+      '[Canvas Artifact] 🚀 Initialize called with documentId:',
+      documentId,
+    );
+
+    // This is called when Canvas is opened from chat history
+    // The AI SDK will call onUpdateDocument after this
+  },
+
   onStreamPart: ({ streamPart, setArtifact }) => {
     console.log('[Canvas Artifact] 🔄 Stream received:', {
       type: streamPart.type,
       hasData: 'data' in streamPart,
+      timestamp: new Date().toISOString(),
     });
 
-    // Handle Canvas task data from server handler
+    // Handle Canvas task data from server handler (creation and reopening)
     if (streamPart.type === 'data-textDelta') {
-      console.log(
-        '[Canvas Artifact] 📥 Received Canvas data:',
-        streamPart.data,
-      );
+      console.log('[Canvas Artifact] 📥 Received Canvas data:', {
+        dataLength: streamPart.data?.length || 0,
+        dataPreview: streamPart.data?.substring(0, 100) || 'none',
+      });
 
       try {
         const canvasData = JSON.parse(streamPart.data);
 
+        console.log('[Canvas Artifact] 📊 Parsed Canvas data:', {
+          taskCount: canvasData.tasks?.length || 0,
+          hasDocumentId: !!canvasData.documentId,
+          hasTitle: !!canvasData.title,
+          status: canvasData.status,
+        });
+
         if (canvasData.tasks && canvasData.tasks.length > 0) {
           console.log(
-            '[Canvas Artifact] ✅ Setting Canvas content with tasks:',
-            {
-              taskCount: canvasData.tasks.length,
-              documentId: canvasData.documentId,
-            },
+            '[Canvas Artifact] ✅ Setting artifact content with tasks',
           );
 
           setArtifact((draftArtifact) => ({
@@ -269,12 +283,29 @@ export const canvasArtifact = new Artifact<'canvas'>({
             status: 'streaming',
           }));
 
-          toast.success(`Canvas created with ${canvasData.tasks.length} tasks`);
+          toast.success(`Canvas loaded with ${canvasData.tasks.length} tasks`);
         } else {
-          console.log('[Canvas Artifact] Received placeholder Canvas data');
+          console.log(
+            '[Canvas Artifact] ⚠️ No tasks in Canvas data, setting empty content',
+          );
+
+          setArtifact((draftArtifact) => ({
+            ...draftArtifact,
+            content: streamPart.data, // Still set content even if empty
+            isVisible: true,
+            status: 'idle',
+          }));
         }
       } catch (error) {
-        console.log('[Canvas Artifact] Error parsing Canvas data:', error);
+        console.error('[Canvas Artifact] ❌ Error parsing Canvas data:', error);
+
+        // Set raw data even if JSON parsing fails
+        setArtifact((draftArtifact) => ({
+          ...draftArtifact,
+          content: streamPart.data,
+          isVisible: true,
+          status: 'idle',
+        }));
       }
     }
   },

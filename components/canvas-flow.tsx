@@ -184,7 +184,7 @@ const TaskDecompositionTitleNode = ({
 const TaskNode = ({ data }: { data: { task: Task } }) => {
   const [expanded, setExpanded] = useState(false);
   return (
-    <Card className="w-64 bg-white shadow-lg border-2 border-blue-200 relative">
+    <Card className="w-80 bg-white shadow-lg border-2 border-blue-200 relative">
       {/* Input handles */}
       <Handle
         type="target"
@@ -225,70 +225,130 @@ const TaskNode = ({ data }: { data: { task: Task } }) => {
         }}
       />
 
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold text-blue-800">
-            {data.task.title}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {data.task.status === 'pending' && (
-              <Badge
-                variant="secondary"
-                className="bg-yellow-100 text-yellow-800 text-xs"
-              >
-                <ClockIcon className="size-3 mr-1" />
-                Pending
-              </Badge>
-            )}
-            {data.task.status === 'recruiting' && (
-              <Badge
-                variant="secondary"
-                className="bg-purple-100 text-purple-800 text-xs"
-              >
-                <UserPlusIcon className="size-3 mr-1" />
-                Recruiting
-              </Badge>
-            )}
-            {data.task.status === 'in-progress' && (
-              <Badge
-                variant="secondary"
-                className="bg-blue-100 text-blue-800 text-xs"
-              >
-                <PlayIcon className="size-3 mr-1" />
-                Active
-              </Badge>
-            )}
-            {data.task.status === 'completed' && (
-              <Badge
-                variant="secondary"
-                className="bg-green-100 text-green-800 text-xs"
-              >
-                <CheckIcon className="size-3 mr-1" />
-                Completed
-              </Badge>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setExpanded((prev) => !prev)}
-              className="size-6 p-0"
-              aria-label={
-                expanded ? 'Collapse task details' : 'Expand task details'
-              }
-            >
-              {expanded ? (
-                <ChevronUp className="size-4" />
-              ) : (
-                <ChevronDown className="size-4" />
+      <CardHeader className="pb-3">
+        <div className="space-y-2">
+          {/* Title row with status and expand button */}
+          <div className="flex items-start justify-between gap-2">
+            <CardTitle className="text-sm font-semibold text-blue-800 flex-1">
+              {data.task.title}
+            </CardTitle>
+            <div className="flex items-center gap-2 shrink-0">
+              {data.task.status === 'pending' && (
+                <Badge
+                  variant="secondary"
+                  className="bg-yellow-100 text-yellow-800 text-xs"
+                >
+                  <ClockIcon className="size-3 mr-1" />
+                  Pending
+                </Badge>
               )}
-            </Button>
+              {data.task.status === 'recruiting' && (
+                <Badge
+                  variant="secondary"
+                  className="bg-purple-100 text-purple-800 text-xs"
+                >
+                  <UserPlusIcon className="size-3 mr-1" />
+                  Recruiting
+                </Badge>
+              )}
+              {data.task.status === 'in-progress' && (
+                <Badge
+                  variant="secondary"
+                  className="bg-blue-100 text-blue-800 text-xs"
+                >
+                  <PlayIcon className="size-3 mr-1" />
+                  Active
+                </Badge>
+              )}
+              {data.task.status === 'completed' && (
+                <Badge
+                  variant="secondary"
+                  className="bg-green-100 text-green-800 text-xs"
+                >
+                  <CheckIcon className="size-3 mr-1" />
+                  Completed
+                </Badge>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setExpanded((prev) => !prev)}
+                className="size-6 p-0"
+                aria-label={
+                  expanded ? 'Collapse task details' : 'Expand task details'
+                }
+              >
+                {expanded ? (
+                  <ChevronUp className="size-4" />
+                ) : (
+                  <ChevronDown className="size-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Description row - full width */}
+          <div className="text-xs text-gray-600 leading-relaxed">
+            {data.task.description}
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-0 space-y-3">
+        {/* Execute Button - Always Visible */}
+        <Button
+          onClick={() => {
+            console.log(`Execute task: ${data.task.id}`);
+            // TODO: Add actual backend execution logic
+          }}
+          disabled={
+            data.task.status === 'completed' ||
+            data.task.status === 'in-progress'
+          }
+          className={`w-full ${
+            data.task.status === 'completed'
+              ? 'bg-green-100 text-green-800 cursor-not-allowed'
+              : data.task.status === 'in-progress'
+                ? 'bg-blue-100 text-blue-800 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+          }`}
+          size="sm"
+        >
+          {data.task.status === 'completed' && (
+            <>
+              <CheckIcon className="size-4 mr-2" />
+              Completed
+            </>
+          )}
+          {data.task.status === 'in-progress' && (
+            <>
+              <PlayIcon className="size-4 mr-2" />
+              Running...
+            </>
+          )}
+          {(data.task.status === 'pending' ||
+            data.task.status === 'recruiting') && (
+            <>
+              <PlayIcon className="size-4 mr-2" />
+              Execute Task
+            </>
+          )}
+        </Button>
+
+        {/* Expanded Details */}
         {expanded && (
-          <div className="text-xs text-gray-600 mb-2">
-            {data.task.description}
+          <div className="space-y-2">
+            <div className="text-xs text-gray-500">
+              <div className="font-medium mb-1">Task Details:</div>
+              <div className="space-y-1">
+                <div>
+                  <span className="font-medium">ID:</span> {data.task.id}
+                </div>
+                <div>
+                  <span className="font-medium">Status:</span>{' '}
+                  {data.task.status}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </CardContent>

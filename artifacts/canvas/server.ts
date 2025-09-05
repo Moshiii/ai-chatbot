@@ -59,19 +59,36 @@ export const canvasDocumentHandler = createDocumentHandler({
     }
   },
 
-  onUpdateDocument: async ({ document }: UpdateDocumentCallbackProps) => {
+  onUpdateDocument: async ({
+    document,
+    dataStream,
+  }: UpdateDocumentCallbackProps) => {
     console.log(
       `[Canvas Handler] 📖 Loading existing Canvas: ${document.title} (${document.id})`,
     );
 
-    // Return existing content for reopened Canvas documents
-    return (
+    // Get saved Canvas content from database
+    const savedContent =
       document.content ||
       JSON.stringify({
         tasks: [],
         documentId: document.id,
         title: document.title,
-      })
-    );
+      });
+
+    console.log(`[Canvas Handler] 📤 Streaming saved Canvas content:`, {
+      hasContent: !!document.content,
+      contentLength: savedContent.length,
+      contentPreview: savedContent.substring(0, 100),
+    });
+
+    // Stream the saved Canvas content to artifact (critical for reopening)
+    dataStream.write({
+      type: 'data-textDelta',
+      data: savedContent,
+      transient: false, // Content should persist
+    });
+
+    return savedContent;
   },
 });
