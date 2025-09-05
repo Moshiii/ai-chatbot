@@ -192,14 +192,31 @@ The tool will communicate with an external A2A-compliant agent that specializes 
 
         if (result?.kind === 'task') {
           const task = result as Task;
+          console.log(
+            '[A2A Tool] Extracted tasks from A2A Task (TaskStatusUpdateEvent) artifacts:',
+            {
+              hasArtifacts: !!task.artifacts,
+              artifactsLength: task.artifacts?.length || 0,
+              hasStatus: !!task.status,
+              statusState: task.status?.state,
+            },
+          );
           extractedTasks = extractTasksFromA2AResponse(
             task,
             webhookToken,
             urgency,
             title,
           );
+
+          console.log('[A2A Tool] Extracted tasks from A2A Task response:', {
+            taskCount: extractedTasks.length,
+            taskIds: extractedTasks.map((t) => t.id),
+          });
         } else if (result?.kind === 'message') {
-          // Handle case where Python agent returns a Message with task data in parts
+          // This path should ideally not be taken if Python agent sends TaskStatusUpdateEvent with artifacts
+          console.log(
+            '[A2A Tool] Processing Message response (fallback path) with potential task data',
+          );
           const message = result as any;
           extractedTasks = extractTasksFromMessageResponse(
             message,
@@ -207,6 +224,11 @@ The tool will communicate with an external A2A-compliant agent that specializes 
             urgency,
             title,
           );
+
+          console.log('[A2A Tool] Extracted tasks from A2A Message response:', {
+            taskCount: extractedTasks.length,
+            taskIds: extractedTasks.map((t) => t.id),
+          });
         }
 
         // Step 3: Create canvas document
@@ -430,12 +452,113 @@ function extractTasksFromA2AResponse(
 ) {
   const tasks: any[] = [];
 
-  // First, check if this is actually a Message with parts (from Python agent)
-  // The Python agent returns a Message but the A2A client might interpret it as a Task
-  const taskAsAny = task as any;
-  if (taskAsAny.parts && Array.isArray(taskAsAny.parts)) {
+  // Prioritize artifacts from TaskStatusUpdateEvent
+  if (task.artifacts && Array.isArray(task.artifacts)) {
     console.log(
-      '[A2A Tool] Processing task with parts (Message-like structure):',
+      '[A2A Tool] Processing artifacts for task data (from TaskStatusUpdateEvent):',
+      {
+        artifactsCount: task.artifacts.length,
+      },
+    );
+    for (const artifact of task.artifacts) {
+      if (artifact.parts && Array.isArray(artifact.parts)) {
+        for (const part of artifact.parts) {
+          if (
+            part.kind === 'data' &&
+            'data' in part &&
+            part.data &&
+            typeof part.data === 'object'
+          ) {
+            const partData = part.data as any;
+
+            if (partData.type === 'task' && partData.task) {
+              const taskData = partData.task;
+              const mappedTask = {
+                id: taskData.id || generateUUID(),
+                title: taskData.title || 'Unnamed Task',
+                description: taskData.description || '',
+                status: mapA2AStatusToDbStatus(taskData.status) || 'submitted',
+                contextId: task.contextId || generateUUID(),
+                webhookToken: webhookToken,
+                assignedAgent: taskData.assignedAgent,
+                priority: taskData.priority || urgency,
+                createdAt: taskData.createdAt
+                  ? new Date(taskData.createdAt)
+                  : new Date(),
+              };
+              tasks.push(mappedTask);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Fallback: Check task history for agent messages with task data
+  if (tasks.length === 0 && task.history && Array.isArray(task.history)) {
+    console.log('[A2A Tool] Processing task history for agent messages:', {
+      historyCount: task.history.length,
+      historyRoles: task.history.map((msg: any) => msg.role),
+    });
+
+    // Look for agent messages in history that contain task data
+    for (const historyMessage of task.history) {
+      if (
+        historyMessage.role === 'agent' &&
+        historyMessage.parts &&
+        Array.isArray(historyMessage.parts)
+      ) {
+        console.log('[A2A Tool] Found agent message in history with parts:', {
+          partsCount: historyMessage.parts.length,
+          partTypes: historyMessage.parts.map((p: any) => p.kind),
+        });
+
+        for (const part of historyMessage.parts) {
+          if (
+            part.kind === 'data' &&
+            'data' in part &&
+            part.data &&
+            typeof part.data === 'object'
+          ) {
+            const partData = part.data as any;
+            console.log('[A2A Tool] Found data part in history:', {
+              dataType: partData.type,
+              hasTask: !!partData.task,
+            });
+
+            if (partData.type === 'task' && partData.task) {
+              const taskData = partData.task;
+              const mappedTask = {
+                id: taskData.id || generateUUID(),
+                title: taskData.title || 'Unnamed Task',
+                description: taskData.description || '',
+                status: mapA2AStatusToDbStatus(taskData.status) || 'submitted',
+                contextId: task.contextId || generateUUID(),
+                webhookToken: webhookToken,
+                assignedAgent: taskData.assignedAgent,
+                priority: taskData.priority || urgency,
+                createdAt: taskData.createdAt
+                  ? new Date(taskData.createdAt)
+                  : new Date(),
+              };
+
+              console.log('[A2A Tool] Extracted task from history:', {
+                id: mappedTask.id,
+                title: mappedTask.title,
+              });
+              tasks.push(mappedTask);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Additional fallback: Check if task has parts directly (Message-like structure)
+  const taskAsAny = task as any;
+  if (tasks.length === 0 && taskAsAny.parts && Array.isArray(taskAsAny.parts)) {
+    console.log(
+      '[A2A Tool] Processing task with parts (Message-like structure, fallback):',
       {
         partsCount: taskAsAny.parts.length,
         partTypes: taskAsAny.parts.map((p: any) => p.kind),
@@ -443,12 +566,6 @@ function extractTasksFromA2AResponse(
     );
 
     for (const part of taskAsAny.parts) {
-      console.log('[A2A Tool] Processing task part:', {
-        kind: part.kind,
-        hasData: 'data' in part,
-        dataType: 'data' in part ? typeof part.data : 'none',
-      });
-
       if (
         part.kind === 'data' &&
         'data' in part &&
@@ -456,12 +573,6 @@ function extractTasksFromA2AResponse(
         typeof part.data === 'object'
       ) {
         const partData = part.data as any;
-        console.log('[A2A Tool] Found task data part:', {
-          dataType: partData.type,
-          hasTask: !!partData.task,
-          taskKeys: partData.task ? Object.keys(partData.task) : [],
-        });
-
         if (partData.type === 'task' && partData.task) {
           const taskData = partData.task;
           const mappedTask = {
@@ -477,69 +588,13 @@ function extractTasksFromA2AResponse(
               ? new Date(taskData.createdAt)
               : new Date(),
           };
-
-          console.log('[A2A Tool] Extracted task from top-level A2A part:', {
-            originalId: taskData.id,
-            mappedId: mappedTask.id,
-            title: mappedTask.title,
-            status: mappedTask.status,
-          });
           tasks.push(mappedTask);
         }
       }
     }
   }
 
-  // Then, process artifacts to find task data parts following A2A specification
-  // (This is for cases where tasks might be embedded in artifacts)
-  if (task.artifacts && Array.isArray(task.artifacts)) {
-    for (const artifact of task.artifacts) {
-      if (artifact.parts && Array.isArray(artifact.parts)) {
-        for (const part of artifact.parts) {
-          // A2A specification: DataPart has kind='data' and data object
-          if (
-            part.kind === 'data' &&
-            'data' in part &&
-            part.data &&
-            typeof part.data === 'object'
-          ) {
-            const partData = part.data as any;
-
-            // Check for task data following the format from Python agent
-            if (partData.type === 'task' && partData.task) {
-              const taskData = partData.task;
-
-              // Map A2A task format to database task format
-              const mappedTask = {
-                id: taskData.id || generateUUID(),
-                title: taskData.title || 'Unnamed Task',
-                description: taskData.description || '',
-                status: mapA2AStatusToDbStatus(taskData.status) || 'submitted',
-                contextId: task.contextId || generateUUID(),
-                webhookToken: webhookToken,
-                assignedAgent: taskData.assignedAgent,
-                priority: taskData.priority || urgency,
-                createdAt: taskData.createdAt
-                  ? new Date(taskData.createdAt)
-                  : new Date(),
-              };
-
-              console.log('[A2A Tool] Extracted task from A2A artifact:', {
-                originalId: taskData.id,
-                mappedId: mappedTask.id,
-                title: mappedTask.title,
-                status: mappedTask.status,
-              });
-
-              tasks.push(mappedTask);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // As a last resort, if no structured tasks were found, try to extract from task status message
+  // As a final fallback, if no structured tasks were found, try to extract from task status message
   // This will create a single generic task based on the status message
   if (tasks.length === 0 && task.status?.message) {
     const statusMessageText = convertA2APartsToText(task.status.message.parts);

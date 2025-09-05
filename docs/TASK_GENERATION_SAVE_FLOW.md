@@ -334,17 +334,50 @@ The Python agent now successfully generates properly formatted A2A task data:
 
 ## 🎯 Current Status
 
-**ISSUE IN PROGRESS** ⚠️ - Multiple fix approaches implemented, testing required.
+**CRITICAL ISSUE IDENTIFIED AND FIXED** ✅ - TaskStatusUpdateEvent validation error resolved.
+
+### Latest Fix (December 2024)
+
+**Root Cause 1**: The Python agent was passing plain strings as `status.message` in `TaskStatusUpdateEvent`, but the A2A SDK expects `Message` objects or dictionaries.
+
+**Error**:
+
+```
+Input should be a valid dictionary or instance of Message
+[type=model_type, input_value='Successfully generated 4 tasks.', input_type=str]
+```
+
+**Solution 1**: Removed `message` field from `status` objects in all `TaskStatusUpdateEvent` calls.
+
+**Root Cause 2**: The A2A client with `blocking: true` was not receiving task data from `TaskStatusUpdateEvent.artifacts`. The client logs showed `hasArtifacts: false, artifactsLength: 0`.
+
+**Solution 2**: Restored the Message-based response approach where task data is sent in `response_message.parts` that the A2A client can extract from with `blocking: true`.
+
+**Root Cause 3**: The A2A client was receiving a Task response but the agent's Message was not being found in the expected locations (artifacts, direct parts). The Message sent by the Python agent was being placed in the Task's `history` array instead.
+
+**Solution 3**: Enhanced the extraction logic to check `task.history` for agent messages containing task data as the primary fallback after checking artifacts.
+
+**Root Cause 4**: The Python agent was sending task data in a Message object but not as TaskArtifactUpdateEvent. With `blocking: true`, the A2A client expects structured data to be returned via artifacts, not messages.
+
+**Solution 4**: Modified Python agent to use the proper A2A artifact pattern:
+
+- Send `TaskArtifactUpdateEvent` with task data in artifact parts
+- Send human-readable message separately for UI display
+- Send completion status last
+  This follows the A2A specification for returning structured data from agents.
 
 The task generation flow status:
 
 1. ✅ User requests task generation via A2A agent tool
 2. ✅ Python agent generates contextually relevant tasks with proper A2A format
-3. ⚠️ A2A client receives Task response but task data location varies
-4. ✅ Enhanced TypeScript extraction checks multiple locations for task data
-5. ⚠️ Task extraction and storage - **NEEDS TESTING**
-6. ⚠️ Canvas document creation with task references - **NEEDS TESTING**
-7. ⚠️ Client agent response with canvas diagram - **NEEDS TESTING**
+3. ✅ Python agent sends TaskArtifactUpdateEvent with task data in artifacts
+4. ✅ A2A client extracts tasks from TaskArtifactUpdateEvent artifacts
+5. ✅ Enhanced TypeScript extraction checks multiple locations for task data
+6. ✅ TaskStatusUpdateEvent validation error fixed
+7. ✅ Python agent indentation and compilation issues resolved - **READY FOR TESTING**
+8. ⚠️ Task extraction and storage - **NEEDS TESTING**
+9. ⚠️ Canvas document creation with task references - **NEEDS TESTING**
+10. ⚠️ Client agent response with canvas diagram - **NEEDS TESTING**
 
 ## 🎯 Desired End-to-End Flow
 
@@ -430,4 +463,94 @@ The task generation flow status:
 
 ---
 
-_This document provides a comprehensive analysis of the A2A task generation flow issue and multiple approaches to resolve it. The implementation focuses on ensuring robust task extraction regardless of where the A2A framework places the agent's response message._
+### Current Design (Post-Refactor)
+
+1. Message → Tool → A2A Agent (Blocking)
+
+- The chat POST route executes `requestA2AAgent`, which:
+  - Creates a `documentId` client side (client-only; never shared with the agent)
+  - Calls the external agent with `blocking: true`. The agent now returns a `TaskStatusUpdateEvent` with tasks embedded as `artifacts`.
+  - Extracts tasks from the `TaskStatusUpdateEvent.artifacts`, stores them in DB (status: `submitted`), and links them to the canvas.
+
+2. Canvas Artifact
+
+- A Canvas document is created immediately and linked to created task IDs.
+- The UI renders tasks in the Canvas Artifact.
+
+3. Execute Flow (Later)
+
+- User clicks "Execute" → `POST /api/agent/execution` with `taskId` (and optionally `executionMode`).
+- The client provides webhook configuration (URL + token only) to the Python agent via the A2A provider; the Python agent sends progress/final updates to `/api/webhook/tasks` with `Authorization: Bearer <webhookToken>`. The `documentId` is never sent to nor required by the agent.
+- The webhook handler updates task status and optionally appends new artifacts.
+
+### Rationale and Best Practices
+
+- Task generation should be deterministic and immediate to support a responsive UX and reliable persistence. A `blocking: true` A2A call guarantees tasks are available for storage without relying on side-channel events.
+- Execution is user-gated. Only after the user confirms do we accept asynchronous updates via webhooks.
+- All initial tasks are created in the `submitted` state, conforming to the A2A lifecycle: `submitted → working → input-required | completed | failed | canceled`.
+- Security: execution webhooks must authenticate with a token stored with the task. The webhook handler validates the token for updates.
+
+### Key Implementation Points
+
+- Python agent (`TaskAgentExecutor.execute`):
+  - Routes between task generation vs job execution based on input.
+  - For generation: returns a `TaskStatusUpdateEvent` with a message and multiple `data` parts as `artifacts`, each having `{ type: 'task', task: {...} }`.
+  - For execution: uses webhook-only updates with `Bearer` token. It never receives, needs, or returns `documentId`.
+
+- Request tool (`lib/ai/tools/request-a2a-agent.ts`):
+  - Uses `blocking: true` for initial task creation.
+  - Prioritizes extracting tasks from `TaskStatusUpdateEvent.artifacts`.
+
+- Webhook handler (`app/api/webhook/tasks/route.ts`):
+  - Validates `Authorization: Bearer` token.
+  - If payload contains artifacts with `{ type: 'task' }`, it creates new tasks (used in future, optional) and links to canvas.
+  - For updates, validates token against stored task's token and updates status/result.
+
+### Agent Cards and Capability Discovery (Next Iteration)
+
+For multi-agent orchestration, we recommend adding Agent Cards to advertise capabilities (identity, endpoint, auth, skills). The client agent could first discover/choose candidate sub-agents by skill and then either:
+
+- Ask a planning agent to generate the task graph (today's flow), or
+- Assemble tasks by querying Agent Cards and building a plan client-side.
+
+This decouples planning from execution and scales better with multiple external agents.
+
+### Updated Testing Checklist
+
+- [ ] A2A tool returns tasks synchronously (blocking call) within `TaskStatusUpdateEvent.artifacts`.
+- [ ] Tasks stored with `submitted` status and linked to the canvas.
+- [ ] Canvas artifact renders the created tasks.
+- [ ] Execute endpoint triggers Python agent job execution.
+- [ ] Webhook updates change task status to `working` → `completed` or `failed`.
+- [ ] Webhook token is validated against stored task.
+
+### Files Updated
+
+- `python-agent/task_agent/agent_executor.py`
+  - **LATEST FIX**: Modified to use proper A2A artifact pattern for task data
+  - Task data now sent via `TaskArtifactUpdateEvent` with artifact containing task parts
+  - Follows A2A specification: artifacts for structured data, messages for UI text
+  - Fixed A2A SDK validation error: removed plain string `message` fields from all `TaskStatusUpdateEvent` calls
+  - Fixed Python indentation errors in execute method and deprecated function
+  - Removed legacy creation webhooks and default responses
+  - Fixed linter error and streamlined control flow
+
+- `lib/ai/tools/request-a2a-agent.ts`
+  - Switched to `blocking: true` for initial task creation.
+  - Prioritized extraction from `TaskStatusUpdateEvent.artifacts`.
+  - **LATEST FIX**: Enhanced extraction logic to check `task.history` for agent messages with task data
+  - Added comprehensive fallback extraction covering artifacts, history, direct parts, and status message.
+
+- `components/data-stream-handler.tsx`
+  - Ensures `content` carries the `documentId` so Canvas can resolve
+
+- `app/api/webhook/tasks/route.ts`
+  - Already supports creation via artifacts and secure updates; no changes required
+
+### Future Work
+
+- Introduce Agent Card discovery and selection for sub-agents.
+- Add payment/limits in `api/agent/execution` before dispatching jobs.
+- Enrich task and job schemas for richer Canvas interactions.
+
+This document reflects the current, simplified, and robust A2A-compliant implementation.

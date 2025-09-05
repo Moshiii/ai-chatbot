@@ -42,21 +42,19 @@ class TaskAgentExecutor(AgentExecutor):
                 await event_queue.enqueue_event(TaskStatusUpdateEvent(
                     taskId=context.task_id,
                     contextId=context.context_id,
-                    status={"state": "completed", "message": "Execution started; updates via webhook."},
+                    status={"state": "completed"},
                     final=True
                 ))
             else:
                 print("[TaskAgent] Detected task generation request")
                 await self._generate_tasks_response(context, user_message, event_queue)
-
                 print("[TaskAgent] Task generation completed - response sent to A2A client")
-
         except Exception as e:
             print(f"[TaskAgent] Error in execute: {e}")
             await event_queue.enqueue_event(TaskStatusUpdateEvent(
                 taskId=context.task_id,
                 contextId=context.context_id,
-                status={"state": "failed", "message": str(e)},
+                status={"state": "failed"},
                 final=True
             ))
 
@@ -114,18 +112,28 @@ class TaskAgentExecutor(AgentExecutor):
                     data=task_data
                 ))
 
-            # Combine all parts into single message
-            all_parts = [text_part] + data_parts
-
-            # Create the response message that the A2A client will receive immediately
+            # Create an artifact containing all task data
+            # This is what the A2A client expects when using blocking: true
+            artifact = Artifact(
+                artifactId=str(uuid.uuid4()),
+                parts=data_parts  # Include only the data parts with task objects
+            )
+            
+            # Send the artifact with task data via TaskArtifactUpdateEvent
+            # This is the standard A2A way to return structured data
+            await event_queue.enqueue_event(TaskArtifactUpdateEvent(
+                taskId=context.task_id,
+                contextId=context.context_id,
+                artifact=artifact,
+                final=False  # Not final yet, we'll send completion status next
+            ))
+            
+            print(f"[TaskAgent] ✅ Sent TaskArtifactUpdateEvent with {len(data_parts)} tasks")
+            
+            # Send a human-readable message for the UI
             response_message = new_agent_text_message(
                 f"I've analyzed your request and created {len(jobs)} structured tasks for execution. Each task has been assigned to a specialized agent and is ready for processing."
             )
-
-            # Replace the message parts with our structured task data
-            response_message.parts = all_parts
-
-            # Send the complete response message immediately
             await event_queue.enqueue_event(response_message)
             
             # Send final completion status
@@ -136,11 +144,9 @@ class TaskAgentExecutor(AgentExecutor):
                 final=True
             ))
 
-            print(f"[TaskAgent] ✅ Response message sent to A2A client with {len(jobs)} tasks")
-
             print(f"[TaskAgent] ✅ Successfully generated {len(jobs)} A2A-compliant tasks")
             print(f"[TaskAgent] 📋 Task IDs: {[job.get('id', f'task-{i}') for i, job in enumerate(jobs)]}")
-            print(f"[TaskAgent] 📦 Message parts: {len(all_parts)} (1 text + {len(data_parts)} data parts)")
+            print(f"[TaskAgent] 📦 Artifact contains {len(data_parts)} task data parts")
 
         except Exception as e:
             print(f"[TaskAgent] ❌ Error generating tasks: {e}")
