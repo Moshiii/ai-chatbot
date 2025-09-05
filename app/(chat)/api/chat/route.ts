@@ -219,12 +219,16 @@ export async function POST(request: Request) {
 
         result.consumeStream();
 
+        console.log(
+          '[Chat API] 🔄 Merging result stream with UI message stream',
+        );
         dataStream.merge(
           result.toUIMessageStream({
             sendReasoning: true,
-            originalMessages: uiMessages, // Fix for AI SDK v5 to prevent repeated assistant messages with tools
+            originalMessages: uiMessages, // Required for AI SDK v5 proper artifact creation
           }),
         );
+        console.log('[Chat API] ✅ Stream merge completed');
       },
       generateId: () => chatIds.generateMessageId().databaseId,
       onFinish: async ({ messages }) => {
