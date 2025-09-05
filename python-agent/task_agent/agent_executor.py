@@ -33,6 +33,10 @@ class TaskAgentExecutor(AgentExecutor):
             user_message = self._extract_user_message(context)
             print(f"[TaskAgent] Incoming message: '{user_message}'")
 
+            # Check if this is a blocking request by examining the context
+            is_blocking_request = self._is_blocking_request(context)
+            print(f"[TaskAgent] Request type: {'blocking' if is_blocking_request else 'non-blocking'}")
+
             # Branch: job execution vs task generation
             if self._is_job_execution_request(user_message):
                 print("[TaskAgent] Detected job execution request")
@@ -47,7 +51,12 @@ class TaskAgentExecutor(AgentExecutor):
                 ))
             else:
                 print("[TaskAgent] Detected task generation request")
-                await self._generate_tasks_response(context, user_message, event_queue)
+                if is_blocking_request:
+                    # For blocking requests, return data synchronously through the task result
+                    await self._generate_tasks_blocking(context, user_message, event_queue)
+                else:
+                    # For non-blocking requests, use the webhook pattern
+                    await self._generate_tasks_response(context, user_message, event_queue)
                 print("[TaskAgent] Task generation completed - response sent to A2A client")
         except Exception as e:
             print(f"[TaskAgent] Error in execute: {e}")
@@ -152,6 +161,87 @@ class TaskAgentExecutor(AgentExecutor):
             print(f"[TaskAgent] ❌ Error generating tasks: {e}")
             import traceback
             traceback.print_exc()
+            raise
+
+    async def _generate_tasks_blocking(self, context: RequestContext, user_message: str,
+                                     event_queue: EventQueue) -> None:
+        """Generate tasks for blocking requests - return data synchronously"""
+        print(f"[TaskAgent] Generating tasks for blocking request: '{user_message}'")
+
+        try:
+            # Add system prompt context to improve task generation
+            enhanced_message = self._enhance_user_message_with_system_prompt(user_message)
+            print(f"[TaskAgent] Enhanced message length: {len(enhanced_message)} chars")
+
+            # Generate sample jobs based on ORIGINAL user message for keyword detection
+            jobs = await self._generate_jobs(user_message)
+
+            # Create data parts for each task in A2A-compliant format
+            data_parts = []
+            for i, job in enumerate(jobs):
+                # Ensure job has proper ID
+                job_id = job.get("id") or f"task-{str(uuid.uuid4())}"
+                
+                # A2A-compliant task data structure that matches our extraction logic
+                task_data = {
+                    "type": "task",  # This is the key our extraction looks for
+                    "task": {
+                        "id": job_id,
+                        "title": job.get("title", f"Task {i+1}"),
+                        "description": job.get("description", f"Generated task {i+1} for: {user_message}"),
+                        "status": "submitted",  # Always start as submitted
+                        "assignedAgent": job.get("assignedAgent"),
+                        "contextId": context.context_id,
+                        "priority": "medium",
+                        "createdAt": datetime.utcnow().isoformat() + 'Z',
+                        "webhookToken": str(uuid.uuid4()),  # Generate token for webhook auth
+                        "order": i,
+                        "metadata": {
+                            "source": "a2a_agent",
+                            "userRequest": user_message,
+                            "generatedAt": datetime.utcnow().isoformat() + 'Z'
+                        }
+                    }
+                }
+                
+                print(f"[TaskAgent] 📝 Generated blocking task {i+1}: {task_data['task']['title']} (ID: {job_id})")
+                
+                data_parts.append(Part(
+                    kind="data",
+                    data=task_data
+                ))
+
+            # For blocking requests, we need to return the tasks in the final response
+            # Create an artifact containing all task data
+            artifact = Artifact(
+                artifactId=str(uuid.uuid4()),
+                parts=data_parts  # Include only the data parts with task objects
+            )
+            
+            # Send the artifact with task data via TaskArtifactUpdateEvent
+            # This will be the synchronous response the client receives
+            await event_queue.enqueue_event(TaskArtifactUpdateEvent(
+                taskId=context.task_id,
+                contextId=context.context_id,
+                artifact=artifact,
+                final=True  # This is final for blocking requests
+            ))
+            
+            print(f"[TaskAgent] ✅ Sent blocking TaskArtifactUpdateEvent with {len(data_parts)} tasks")
+            print(f"[TaskAgent] 📋 Blocking Task IDs: {[job.get('id', f'task-{i}') for i, job in enumerate(jobs)]}")
+            print(f"[TaskAgent] 📦 Blocking Artifact contains {len(data_parts)} task data parts")
+
+        except Exception as e:
+            print(f"[TaskAgent] ❌ Error generating blocking tasks: {e}")
+            import traceback
+            traceback.print_exc()
+            # Send error status for blocking requests
+            await event_queue.enqueue_event(TaskStatusUpdateEvent(
+                taskId=context.task_id,
+                contextId=context.context_id,
+                status={"state": "failed"},
+                final=True
+            ))
             raise
 
     async def _process_request_async(self, context: RequestContext, user_message: str) -> None:
@@ -379,6 +469,30 @@ Now process this user request:
             return data.get("type") == "execute_jobs"
         except:
             return False
+    
+    def _is_blocking_request(self, context: RequestContext) -> bool:
+        """Check if this is a blocking request by examining the context"""
+        # Add debugging to understand the context structure
+        print(f"[TaskAgent] 🔍 Debugging context for blocking detection:")
+        print(f"[TaskAgent] Context has message: {hasattr(context, 'message')}")
+        
+        if hasattr(context, 'message') and context.message:
+            print(f"[TaskAgent] Message has configuration: {hasattr(context.message, 'configuration')}")
+            if hasattr(context.message, 'configuration') and context.message.configuration:
+                print(f"[TaskAgent] Configuration: {context.message.configuration}")
+                blocking_value = context.message.configuration.get('blocking', False)
+                print(f"[TaskAgent] Blocking value: {blocking_value}")
+                return blocking_value
+            else:
+                print(f"[TaskAgent] Message attributes: {dir(context.message) if context.message else 'None'}")
+        
+        # Check if there are any other attributes that might indicate blocking
+        print(f"[TaskAgent] Context attributes: {dir(context)}")
+        
+        # For now, assume blocking for tool-based requests from TypeScript client
+        # The TypeScript client uses blocking: true, so we should default to blocking
+        print(f"[TaskAgent] 🔄 Defaulting to blocking for tool-based requests")
+        return True  # Default to blocking for better compatibility with tool-based clients
     
     async def _send_default_response(self, event_queue: EventQueue, context: RequestContext) -> None:
         """Deprecated: no-op default response."""

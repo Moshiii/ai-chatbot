@@ -374,10 +374,13 @@ The task generation flow status:
 4. ✅ A2A client extracts tasks from TaskArtifactUpdateEvent artifacts
 5. ✅ Enhanced TypeScript extraction checks multiple locations for task data
 6. ✅ TaskStatusUpdateEvent validation error fixed
-7. ✅ Python agent indentation and compilation issues resolved - **READY FOR TESTING**
-8. ⚠️ Task extraction and storage - **NEEDS TESTING**
-9. ⚠️ Canvas document creation with task references - **NEEDS TESTING**
-10. ⚠️ Client agent response with canvas diagram - **NEEDS TESTING**
+7. ✅ Python agent indentation and compilation issues resolved
+8. ✅ Added blocking request support to Python agent for synchronous responses
+9. ✅ Enhanced debugging in TypeScript client for task extraction
+10. ✅ Fixed TypeScript linting errors - **READY FOR TESTING**
+11. ⚠️ Task extraction and storage - **NEEDS TESTING**
+12. ⚠️ Canvas document creation with task references - **NEEDS TESTING**
+13. ⚠️ Client agent response with canvas diagram - **NEEDS TESTING**
 
 ## 🎯 Desired End-to-End Flow
 

@@ -158,7 +158,14 @@ The tool will communicate with an external A2A-compliant agent that specializes 
           resultKind: 'result' in response ? response.result?.kind : 'none',
           resultStructure:
             'result' in response ? Object.keys(response.result || {}) : [],
+          hasError: 'error' in response,
         });
+
+        // Enhanced debugging: Log the complete response structure
+        console.log(
+          '[A2A Tool] Complete response structure:',
+          JSON.stringify(response, null, 2),
+        );
 
         if ('error' in response) {
           console.error('[A2A Tool] A2A agent returned error:', response.error);
@@ -192,15 +199,45 @@ The tool will communicate with an external A2A-compliant agent that specializes 
 
         if (result?.kind === 'task') {
           const task = result as Task;
-          console.log(
-            '[A2A Tool] Extracted tasks from A2A Task (TaskStatusUpdateEvent) artifacts:',
-            {
-              hasArtifacts: !!task.artifacts,
-              artifactsLength: task.artifacts?.length || 0,
-              hasStatus: !!task.status,
-              statusState: task.status?.state,
-            },
-          );
+          console.log('[A2A Tool] Processing A2A Task response:', {
+            hasArtifacts: !!task.artifacts,
+            artifactsLength: task.artifacts?.length || 0,
+            hasStatus: !!task.status,
+            statusState: task.status?.state,
+            taskId: task.id,
+            contextId: task.contextId,
+          });
+
+          // Debug: Log artifacts structure in detail
+          if (task.artifacts && task.artifacts.length > 0) {
+            console.log('[A2A Tool] Artifacts structure:');
+            task.artifacts.forEach((artifact, index) => {
+              console.log(`[A2A Tool] Artifact ${index}:`, {
+                artifactId: artifact.artifactId,
+                partsCount: artifact.parts?.length || 0,
+                partTypes: artifact.parts?.map((p) => p.kind) || [],
+              });
+
+              if (artifact.parts) {
+                artifact.parts.forEach((part, partIndex) => {
+                  console.log(
+                    `[A2A Tool] Artifact ${index}, Part ${partIndex}:`,
+                    {
+                      kind: part.kind,
+                      hasData: 'data' in part,
+                      dataType:
+                        'data' in part ? typeof (part as any).data : 'none',
+                      dataStructure:
+                        'data' in part && (part as any).data
+                          ? Object.keys((part as any).data)
+                          : [],
+                    },
+                  );
+                });
+              }
+            });
+          }
+
           extractedTasks = extractTasksFromA2AResponse(
             task,
             webhookToken,
@@ -211,7 +248,21 @@ The tool will communicate with an external A2A-compliant agent that specializes 
           console.log('[A2A Tool] Extracted tasks from A2A Task response:', {
             taskCount: extractedTasks.length,
             taskIds: extractedTasks.map((t) => t.id),
+            taskTitles: extractedTasks.map((t) => t.title),
           });
+
+          if (extractedTasks.length === 0) {
+            console.log(
+              '[A2A Tool] ⚠️ No tasks extracted from Task response - this indicates an issue',
+            );
+            console.log('[A2A Tool] Task debugging info:', {
+              hasArtifacts: !!(result as Task).artifacts,
+              artifactsLength: (result as Task).artifacts?.length || 0,
+              hasHistory: !!(result as Task).history,
+              historyLength: (result as Task).history?.length || 0,
+              hasStatus: !!(result as Task).status,
+            });
+          }
         } else if (result?.kind === 'message') {
           // This path should ideally not be taken if Python agent sends TaskStatusUpdateEvent with artifacts
           console.log(
@@ -228,6 +279,12 @@ The tool will communicate with an external A2A-compliant agent that specializes 
           console.log('[A2A Tool] Extracted tasks from A2A Message response:', {
             taskCount: extractedTasks.length,
             taskIds: extractedTasks.map((t) => t.id),
+          });
+        } else {
+          console.log('[A2A Tool] ⚠️ Unknown result kind or no result:', {
+            resultKind: (result as any)?.kind || 'undefined',
+            hasResult: !!result,
+            resultType: typeof result,
           });
         }
 
@@ -461,8 +518,19 @@ function extractTasksFromA2AResponse(
       },
     );
     for (const artifact of task.artifacts) {
+      console.log('[A2A Tool] Processing artifact:', {
+        artifactId: artifact.artifactId,
+        partsCount: artifact.parts?.length || 0,
+      });
+
       if (artifact.parts && Array.isArray(artifact.parts)) {
         for (const part of artifact.parts) {
+          console.log('[A2A Tool] Processing artifact part:', {
+            kind: part.kind,
+            hasData: 'data' in part,
+            dataType: 'data' in part ? typeof (part as any).data : 'none',
+          });
+
           if (
             part.kind === 'data' &&
             'data' in part &&
@@ -470,6 +538,12 @@ function extractTasksFromA2AResponse(
             typeof part.data === 'object'
           ) {
             const partData = part.data as any;
+            console.log('[A2A Tool] Found data part with structure:', {
+              dataType: partData.type,
+              hasTask: !!partData.task,
+              taskKeys: partData.task ? Object.keys(partData.task) : [],
+              fullData: JSON.stringify(partData, null, 2),
+            });
 
             if (partData.type === 'task' && partData.task) {
               const taskData = partData.task;
@@ -486,7 +560,23 @@ function extractTasksFromA2AResponse(
                   ? new Date(taskData.createdAt)
                   : new Date(),
               };
+
+              console.log('[A2A Tool] Successfully mapped task:', {
+                originalId: taskData.id,
+                mappedId: mappedTask.id,
+                title: mappedTask.title,
+                status: mappedTask.status,
+              });
+
               tasks.push(mappedTask);
+            } else {
+              console.log(
+                '[A2A Tool] Skipping part - not a task type or missing task data:',
+                {
+                  type: partData.type,
+                  hasTask: !!partData.task,
+                },
+              );
             }
           }
         }
