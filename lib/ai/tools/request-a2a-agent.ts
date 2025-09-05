@@ -119,7 +119,7 @@ The tool will communicate with an external A2A-compliant agent that specializes 
           parts: [
             {
               kind: 'text',
-              text: `${userRequirements}\n\nUrgency: ${urgency}\nContext: ${contextId}`,
+              text: userRequirements,
             },
           ],
           contextId: contextId,
@@ -128,6 +128,9 @@ The tool will communicate with an external A2A-compliant agent that specializes 
             title,
           },
         };
+
+        // Create canvas document ID for client-side management (passed to webhook later)
+        const documentId = generateUUID();
 
         console.log('[A2A Tool] Sending request to external agent:', {
           agentUrl,
@@ -140,10 +143,10 @@ The tool will communicate with an external A2A-compliant agent that specializes 
         const response = await client.sendMessage({
           message: a2aMessage,
           configuration: {
-            blocking: false,
+            blocking: true, // Wait for agent message to include tasks in the result
             acceptedOutputModes: ['text/plain', 'application/json'],
             pushNotificationConfig: {
-              url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/webhook/tasks`,
+              url: `http://localhost:3000/api/webhook/tasks`,
               token: webhookToken,
             },
           },
@@ -195,171 +198,8 @@ The tool will communicate with an external A2A-compliant agent that specializes 
             urgency,
             title,
           );
-
-          console.log('[A2A Tool] Extracted tasks from A2A Task response:', {
-            taskCount: extractedTasks.length,
-            taskIds: extractedTasks.map((t) => t.id),
-          });
-
-          // If no tasks found in Task structure, check the task history for agent response messages
-          if (
-            extractedTasks.length === 0 &&
-            task.history &&
-            Array.isArray(task.history)
-          ) {
-            console.log(
-              '[A2A Tool] No tasks in Task structure, checking task history for agent messages',
-            );
-            for (const historyMessage of task.history) {
-              if (historyMessage.role === 'agent' && historyMessage.parts) {
-                console.log(
-                  '[A2A Tool] Found agent message in history, extracting tasks',
-                );
-                const historyTasks = extractTasksFromMessageResponse(
-                  historyMessage,
-                  webhookToken,
-                  urgency,
-                  title,
-                );
-                extractedTasks.push(...historyTasks);
-              }
-            }
-
-            console.log('[A2A Tool] Extracted tasks from Task history:', {
-              taskCount: extractedTasks.length,
-              taskIds: extractedTasks.map((t) => t.id),
-            });
-          }
-
-          // If still no tasks, check the task status message for agent response
-          if (extractedTasks.length === 0 && task.status?.message) {
-            console.log(
-              '[A2A Tool] No tasks in history, checking task status message',
-            );
-            const statusMessage = task.status.message as any;
-            if (statusMessage.role === 'agent' && statusMessage.parts) {
-              console.log(
-                '[A2A Tool] Found agent message in status, extracting tasks',
-              );
-              const statusTasks = extractTasksFromMessageResponse(
-                statusMessage,
-                webhookToken,
-                urgency,
-                title,
-              );
-              extractedTasks.push(...statusTasks);
-
-              console.log(
-                '[A2A Tool] Extracted tasks from Task status message:',
-                {
-                  taskCount: extractedTasks.length,
-                  taskIds: extractedTasks.map((t) => t.id),
-                },
-              );
-            }
-          }
-
-          // If still no tasks, check if the A2A framework put the response in a different location
-          if (extractedTasks.length === 0) {
-            console.log(
-              '[A2A Tool] No tasks found in standard locations, checking alternative locations',
-            );
-
-            // Check if there's any data in the task object that might contain task information
-            const taskAsAny = task as any;
-
-            // Check task status for artifacts (Python agent puts artifacts in status)
-            if (task.status && typeof task.status === 'object') {
-              const statusAsAny = task.status as any;
-              if (
-                statusAsAny.artifacts &&
-                Array.isArray(statusAsAny.artifacts)
-              ) {
-                console.log(
-                  `[A2A Tool] Found ${statusAsAny.artifacts.length} artifacts in task status`,
-                );
-                for (const artifact of statusAsAny.artifacts) {
-                  if (artifact.parts && Array.isArray(artifact.parts)) {
-                    for (const part of artifact.parts) {
-                      if (
-                        part.kind === 'data' &&
-                        part.data?.type === 'task' &&
-                        part.data?.task
-                      ) {
-                        const taskData = part.data.task;
-                        const mappedTask = {
-                          id: taskData.id || generateUUID(),
-                          title: taskData.title || 'Unnamed Task',
-                          description: taskData.description || '',
-                          status:
-                            mapA2AStatusToDbStatus(taskData.status) ||
-                            'submitted',
-                          contextId: task.contextId || generateUUID(),
-                          webhookToken: webhookToken,
-                          assignedAgent: taskData.assignedAgent,
-                          priority: taskData.priority || urgency,
-                          createdAt: taskData.createdAt
-                            ? new Date(taskData.createdAt)
-                            : new Date(),
-                        };
-
-                        console.log(
-                          '[A2A Tool] Extracted task from status artifacts:',
-                          {
-                            originalId: taskData.id,
-                            mappedId: mappedTask.id,
-                            title: mappedTask.title,
-                            status: mappedTask.status,
-                          },
-                        );
-                        extractedTasks.push(mappedTask);
-                      }
-                    }
-                  }
-                }
-              }
-            }
-
-            // Check for any properties that might contain the agent response
-            if (extractedTasks.length === 0) {
-              const possibleResponseKeys = [
-                'response',
-                'result',
-                'data',
-                'content',
-                'output',
-              ];
-              for (const key of possibleResponseKeys) {
-                if (taskAsAny[key] && typeof taskAsAny[key] === 'object') {
-                  console.log(`[A2A Tool] Checking task.${key} for task data`);
-
-                  if (
-                    taskAsAny[key].parts &&
-                    Array.isArray(taskAsAny[key].parts)
-                  ) {
-                    const alternativeTasks = extractTasksFromMessageResponse(
-                      taskAsAny[key],
-                      webhookToken,
-                      urgency,
-                      title,
-                    );
-                    if (alternativeTasks.length > 0) {
-                      console.log(
-                        `[A2A Tool] Found ${alternativeTasks.length} tasks in task.${key}`,
-                      );
-                      extractedTasks.push(...alternativeTasks);
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-          }
         } else if (result?.kind === 'message') {
           // Handle case where Python agent returns a Message with task data in parts
-          console.log(
-            '[A2A Tool] Processing Message response with potential task data',
-          );
           const message = result as any;
           extractedTasks = extractTasksFromMessageResponse(
             message,
@@ -367,60 +207,51 @@ The tool will communicate with an external A2A-compliant agent that specializes 
             urgency,
             title,
           );
-
-          console.log('[A2A Tool] Extracted tasks from A2A Message response:', {
-            taskCount: extractedTasks.length,
-            taskIds: extractedTasks.map((t) => t.id),
-          });
         }
 
-        // Step 3: Only create canvas document if we have tasks
-        if (extractedTasks.length === 0) {
-          // If no tasks were extracted, check if this was a message response without tasks
-          if (result?.kind === 'message') {
-            // Convert A2A message parts (kind-based) to text
-            const messageResult = result as any;
-            const responseText =
-              convertA2APartsToText(messageResult.parts) ||
-              'No response content';
+        // Step 3: Create canvas document
+        console.log(
+          '[A2A Tool] Creating canvas document for A2A task tracking',
+        );
 
-            // Communicate response through dataStream without creating documents
-            dataStream.write({
-              type: 'data-clear',
-              data: null,
-              transient: true,
-            });
+        const [canvasDocument] = await saveDocumentQuery({
+          id: documentId,
+          title: title || 'Task Canvas',
+          kind: 'canvas',
+          content: `# ${title || 'Task Canvas'}\n\nTasks are being generated by the A2A agent. This canvas will be updated with task details as they become available.`,
+          userId: session.user.id,
+        });
 
-            return {
-              content: responseText,
-              message:
-                'A2A agent processed the request but did not generate specific tasks.',
-              contextId: contextId,
-            };
-          }
-
-          throw new Error('A2A agent did not return any tasks');
+        if (!canvasDocument) {
+          throw new Error('Failed to create canvas document');
         }
 
-        if (result?.kind === 'task' || result?.kind === 'message') {
+        // Communicate canvas information to UI via dataStream
+        dataStream.write({
+          type: 'data-kind',
+          data: 'canvas',
+          transient: true,
+        });
+
+        dataStream.write({
+          type: 'data-title',
+          data: title,
+          transient: true,
+        });
+
+        dataStream.write({
+          type: 'data-id',
+          data: canvasDocument.id,
+          transient: true,
+        });
+
+        // If we have immediate tasks (from blocking response), process them
+        if (extractedTasks.length > 0) {
           console.log(
-            '[A2A Tool] Creating canvas document after successful A2A response',
+            '[A2A Tool] Processing immediate tasks from A2A response',
           );
-          const documentId = generateUUID();
 
-          const [canvasDocument] = await saveDocumentQuery({
-            id: documentId,
-            title: title || 'Task Canvas',
-            kind: 'canvas',
-            content: `# ${title || 'Task Canvas'}\n\nTasks generated from A2A agent (${extractedTasks.length} tasks)`,
-            userId: session.user.id,
-          });
-
-          if (!canvasDocument) {
-            throw new Error('Failed to create canvas document');
-          }
-
-          // Step 4: Create tasks in database
+          // Create tasks in database
           const createdTasks = [];
           for (const taskData of extractedTasks) {
             try {
@@ -447,7 +278,7 @@ The tool will communicate with an external A2A-compliant agent that specializes 
             }
           }
 
-          // Step 5: Link tasks to canvas document
+          // Link tasks to canvas document
           if (createdTasks.length > 0) {
             const taskIds = createdTasks.map((t) => t.id);
             await updateDocumentTaskIds({
@@ -455,71 +286,52 @@ The tool will communicate with an external A2A-compliant agent that specializes 
               taskIds,
             });
 
-            console.log('[A2A Tool] Linked tasks to canvas:', {
+            console.log('[A2A Tool] Linked immediate tasks to canvas:', {
               documentId: canvasDocument.id,
               taskIds,
             });
-          }
 
-          // Step 6: Communicate canvas information to UI via dataStream (AI SDK v5 pattern)
-          dataStream.write({
-            type: 'data-id',
-            data: canvasDocument.id,
-            transient: true,
-          });
-
-          dataStream.write({
-            type: 'data-clear',
-            data: null,
-            transient: true,
-          });
-
-          // Write task information to dataStream for UI consumption
-          for (const task of createdTasks) {
-            const taskResult =
-              task.result && typeof task.result === 'object'
-                ? (task.result as any)
-                : {};
-            dataStream.write({
-              type: 'data-task',
-              data: {
-                task: {
-                  id: task.id,
-                  contextId: task.contextId,
-                  status: task.status,
-                  title: taskResult.title || 'Task',
-                  description: taskResult.description || '',
+            // Write task information to dataStream for UI consumption
+            for (const task of createdTasks) {
+              const taskResult =
+                task.result && typeof task.result === 'object'
+                  ? (task.result as any)
+                  : {};
+              dataStream.write({
+                type: 'data-task',
+                data: {
+                  task: {
+                    id: task.id,
+                    contextId: task.contextId,
+                    status: task.status,
+                    title: taskResult.title || 'Task',
+                    description: taskResult.description || '',
+                  },
                 },
-              },
-              transient: true,
-            });
+                transient: true,
+              });
+            }
           }
-
-          dataStream.write({
-            type: 'data-finish',
-            data: null,
-            transient: true,
-          });
-
-          console.log(
-            '[A2A Tool] Communicated canvas and task data via dataStream:',
-            {
-              documentId: canvasDocument.id,
-              taskCount: createdTasks.length,
-            },
-          );
-
-          return {
-            id: canvasDocument.id,
-            title: canvasDocument.title,
-            kind: canvasDocument.kind,
-            content: `Successfully created ${createdTasks.length} tasks and canvas document. Tasks are now being tracked in the canvas.`,
-            taskCount: createdTasks.length,
-            contextId: contextId,
-          };
         }
 
-        throw new Error('A2A agent returned an unexpected response format');
+        dataStream.write({
+          type: 'data-clear',
+          data: null,
+          transient: true,
+        });
+
+        return {
+          id: canvasDocument.id,
+          title: canvasDocument.title,
+          kind: canvasDocument.kind,
+          content:
+            extractedTasks.length > 0
+              ? `Successfully created ${extractedTasks.length} tasks and canvas document. Tasks are now being tracked in the canvas.`
+              : `Canvas created for A2A task tracking. Tasks will be added after confirmation.`,
+          taskCount: extractedTasks.length,
+          contextId: contextId,
+          webhookToken: webhookToken, // Include webhook token for debugging
+        };
       } catch (error: any) {
         console.error('[A2A Tool] Error in integrated flow:', error);
 
