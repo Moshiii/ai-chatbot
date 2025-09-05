@@ -12,7 +12,17 @@ export const canvasDocumentHandler = createDocumentHandler({
     title,
     dataStream,
   }: CreateDocumentCallbackProps) => {
-    console.log(`[Canvas Handler] Creating canvas: ${title} with ID: ${id}`);
+    console.log(
+      `[Canvas Handler] 🚀 onCreateDocument CALLED: ${title} with ID: ${id}`,
+    );
+    console.log(
+      `[Canvas Handler] 📋 Call timestamp: ${new Date().toISOString()}`,
+    );
+    console.log(`[Canvas Handler] 📦 Params received:`, {
+      id,
+      title,
+      hasDataStream: !!dataStream,
+    });
 
     // Initialize empty canvas structure
     const initialData = {
@@ -35,15 +45,27 @@ export const canvasDocumentHandler = createDocumentHandler({
     });
 
     console.log(
-      `[Canvas Handler] Canvas ${id} initialized with empty structure`,
+      `[Canvas Handler] ✅ Canvas ${id} initialized with empty structure`,
     );
-    return JSON.stringify(initialData, null, 2);
+
+    // ✅ CRITICAL FIX: Return document ID as content for Canvas artifact client
+    // The Canvas client expects document ID in content to fetch document data
+    const returnValue = id;
+    console.log(
+      `[Canvas Handler] 🎯 RETURNING document ID as artifact content: "${returnValue}"`,
+    );
+    console.log(
+      `[Canvas Handler] 🎯 Return value type: ${typeof returnValue}, length: ${returnValue.length}`,
+    );
+    return returnValue;
   },
   onUpdateDocument: async ({
     document,
     description,
     dataStream,
   }: UpdateDocumentCallbackProps) => {
+    console.log(`[Canvas Handler] 📝 Updating canvas artifact: ${document.id}`);
+
     // Load existing canvas data when document is opened
     if (document.content) {
       try {
@@ -77,17 +99,11 @@ export const canvasDocumentHandler = createDocumentHandler({
       }
     }
 
-    // Return existing data - Python agent handles all updates
-    const existingData = document.content
-      ? JSON.parse(document.content)
-      : {
-          taskId: null,
-          tasks: [],
-          agents: [],
-          responses: [],
-          summary: null,
-        };
-
-    return JSON.stringify(existingData, null, 2);
+    // ✅ CRITICAL FIX: Return document ID as content for Canvas artifact client
+    // The Canvas client expects document ID in content to fetch document data
+    console.log(
+      `[Canvas Handler] 📤 Returning document ID as artifact content: ${document.id}`,
+    );
+    return document.id;
   },
 });
