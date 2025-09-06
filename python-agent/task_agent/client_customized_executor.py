@@ -983,7 +983,7 @@ def main():
     def create_agent():
         return create_agent_a2a_server(ClientCustomizedExecutor(openai_api_key), client_agent_card)
 
-    asyncio.run(run_server(create_agent, 10025, "Customized Task Agent"))
+    asyncio.run(run_server(create_agent, 9999, "Customized Task Agent"))
 
 
 if __name__ == "__main__":
