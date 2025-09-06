@@ -40,15 +40,30 @@ async def start_task_agent_server():
     )
 
     # Public agent card
-    agent_card = AgentCard(
-        name='Task Agent',
-        description='A Python A2A agent that handles task decomposition and job execution',
-        url='http://localhost:9999/',
-        version='1.0.0',
-        defaultInputModes=['text'],
-        defaultOutputModes=['text'],
+
+    client_agent_card = AgentCard(
+        name="A2A Customized Task Agent",
+        url="http://localhost:10025",
+        description="Intelligent task decomposition agent with real OpenAI integration and A2A agent orchestration",
+        version="1.0",
         capabilities=AgentCapabilities(streaming=True),
-        skills=[task_creation_skill, task_execution_skill],
+        defaultInputModes=["text/plain"],
+        defaultOutputModes=["application/json"],
+        skills=[
+            AgentSkill(
+                id="task_decomposition",
+                name="Intelligent Task Decomposition",
+                description="Break down complex requests into actionable tasks using OpenAI and execute them with specialized A2A agents",
+                tags=["task-management", "ai", "agents", "decomposition", "orchestration"],
+                examples=[
+                    "Plan a comprehensive trip to Japan",
+                    "Build a modern web application with authentication",
+                    "Create an e-commerce platform with payment integration",
+                    "Develop a machine learning pipeline for data analysis",
+                    "Design and implement a RESTful API"
+                ],
+            )
+        ],
     )
 
     # Create request handler
@@ -59,7 +74,7 @@ async def start_task_agent_server():
 
     # Create server application
     server = A2AStarletteApplication(
-        agent_card=agent_card,
+        agent_card=client_agent_card,
         http_handler=request_handler,
     )
     
