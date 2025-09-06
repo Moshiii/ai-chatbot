@@ -3,6 +3,7 @@ import asyncio
 import os
 import uvicorn
 from typing import Any
+import socket
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -142,3 +143,13 @@ async def run_server(create_agent_function, port: int, name: str):
         await server.serve()
     except Exception as e:
         log_error(f"run_server() error: {e} - name: {name}, port: {port}")
+
+
+def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
+    """Return True if a TCP port is already bound on the given host."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.2)
+            return sock.connect_ex((host, port)) == 0
+    except Exception:
+        return False

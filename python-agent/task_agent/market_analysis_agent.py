@@ -5,13 +5,13 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import TaskState, AgentCard, AgentCapabilities, AgentSkill
 from a2a.utils import new_agent_text_message, new_task
 
-from common import (
+from .common import (
     log_error,
     create_agent_a2a_server,
     run_server,
 )
 
-from market_analyst_agent.manager import FinancialResearchManager
+from .market_analyst_agent.manager import FinancialResearchManager
 
 import dotenv
 dotenv.load_dotenv()

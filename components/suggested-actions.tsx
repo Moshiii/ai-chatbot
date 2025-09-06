@@ -13,16 +13,22 @@ import { useRouter } from 'next/navigation';
 // Constants for suggested actions
 const SUGGESTED_ACTIONS = [
   {
-    title: 'Plan a trip',
-    label: 'to Japan for 5 days',
+    title: 'Analyze market trends',
+    label: 'for renewable energy stocks',
     action:
-      'Please help me plan a 5-day trip to Japan, including suggested destinations, activities, and a daily itinerary.',
+      'Analyze current market trends and provide a detailed report on renewable energy stocks, including performance metrics and investment insights. Use our agent tool to break this down into comprehensive market analysis tasks.',
   },
   {
-    title: 'Research a topic',
-    label: 'about renewable energy',
+    title: 'Find trending topics',
+    label: 'on social media today',
     action:
-      'Research and summarize the latest advancements in renewable energy technologies, focusing on solar and wind power.',
+      'Search for and analyze the top trending topics on social media platforms today. Use our agent tool to organize this into structured trend analysis.',
+  },
+  {
+    title: 'Plan a complex project',
+    label: 'with task decomposition',
+    action:
+      'Help me plan a comprehensive software development project. Use our agent tool to intelligently break this down into specific, actionable tasks with appropriate agent assignments.',
   },
 ] as const;
 
@@ -60,7 +66,7 @@ function PureSuggestedActions({
   return (
     <div
       data-testid="suggested-actions"
-      className="grid sm:grid-cols-2 gap-2 w-full"
+      className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 w-full"
     >
       {SUGGESTED_ACTIONS.map((suggestedAction, index) => (
         <motion.div
@@ -69,7 +75,7 @@ function PureSuggestedActions({
           exit={{ opacity: 0, y: 20 }}
           transition={{ delay: 0.05 * index }}
           key={`suggested-action-${suggestedAction.title}-${index}`}
-          className={index > 1 ? 'hidden sm:block' : 'block'}
+          className="block"
         >
           <Button
             variant="ghost"

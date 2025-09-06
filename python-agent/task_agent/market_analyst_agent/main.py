@@ -1,6 +1,6 @@
 import asyncio
 import os
-from manager import FinancialResearchManager
+from .manager import FinancialResearchManager
 import dotenv
 
 dotenv.load_dotenv()

@@ -43,6 +43,10 @@ if (!process.env.AUTH_GITHUB_ID || !process.env.AUTH_GITHUB_SECRET) {
   );
 }
 
+if (!process.env.AUTH_SECRET) {
+  throw new Error('Missing required AUTH_SECRET environment variable');
+}
+
 export const {
   handlers: { GET, POST },
   auth,
@@ -50,6 +54,10 @@ export const {
   signOut,
 } = NextAuth({
   ...authConfig,
+  secret: process.env.AUTH_SECRET,
+  session: {
+    strategy: 'jwt',
+  },
   providers: [
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,

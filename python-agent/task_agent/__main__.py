@@ -3,6 +3,8 @@
 import uvicorn
 import asyncio
 import logging
+import signal
+import os
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -12,8 +14,9 @@ from a2a.types import (
     AgentCard,
     AgentSkill,
 )
+from starlette.responses import JSONResponse
 from .agent_executor import TaskAgentExecutor
-from .orchestrator_executor import Orchestrator 
+from .orchestrator_executor import Orchestrator
 from .agent_launcher import run_all_agents
 
 # Configure logging
@@ -68,7 +71,7 @@ async def start_task_agent_server():
 
     # Create request handler
     request_handler = DefaultRequestHandler(
-        agent_executor=Orchestrator(),
+        agent_executor=Orchestrator(openai_api_key=os.getenv("OPENAI_API_KEY")),
         task_store=InMemoryTaskStore(),
     )
 
@@ -77,32 +80,77 @@ async def start_task_agent_server():
         agent_card=client_agent_card,
         http_handler=request_handler,
     )
-    
+
     app = server.build()
 
+    # Add health check endpoint using Starlette's route system
+    async def healthz(request):
+        return JSONResponse({"status": "ok"})
+
+    app.add_route("/healthz", healthz, methods=["GET"])
+
     # Start server
-    logger.info("[TaskAgent] Starting Task Agent Server on port 9999")
-    config = uvicorn.Config(app, host="127.0.0.1", port=9999, log_level="info")
+    agent_host = os.getenv("AGENT_HOST", "127.0.0.1")
+    agent_port = int(os.getenv("AGENT_PORT", "9999"))
+    logger.info(f"[TaskAgent] Starting Task Agent Server on port {agent_port}")
+    config = uvicorn.Config(app, host=agent_host, port=agent_port, log_level="info")
     server_instance = uvicorn.Server(config)
     await server_instance.serve()
 
 async def main():
     """Main entry point that starts both the task agent server and all other agents"""
     logger.info("Starting Task Agent system...")
-    
+
     # Create tasks for both the main server and all agents
-    tasks = [
-        start_task_agent_server(),
-        run_all_agents(),
-    ]
-    
+    orchestrator_task = asyncio.create_task(start_task_agent_server(), name="orchestrator")
+    agents_task = asyncio.create_task(run_all_agents(), name="agents")
+
+    stop_event = asyncio.Event()
+
+    def _handle_stop_signal():
+        stop_event.set()
+
     try:
-        # Run both the main server and all agents concurrently
-        await asyncio.gather(*tasks)
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, _handle_stop_signal)
+            except NotImplementedError:
+                pass
+    except RuntimeError:
+        pass
+
+    try:
+        # Wait until either orchestrator exits/fails OR a stop signal arrives
+        done, pending = await asyncio.wait(
+            {orchestrator_task, agents_task, asyncio.create_task(stop_event.wait())},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        # If a stop signal triggered, cancel running tasks
+        if stop_event.is_set():
+            for task in (orchestrator_task, agents_task):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(orchestrator_task, agents_task, return_exceptions=True)
+        else:
+            # If one of the service tasks completed (success or failure), cancel the other
+            for task in (orchestrator_task, agents_task):
+                if task not in done and not task.done():
+                    task.cancel()
+            await asyncio.gather(orchestrator_task, agents_task, return_exceptions=True)
     except KeyboardInterrupt:
         logger.info("Received interrupt signal, shutting down...")
+        for task in (orchestrator_task, agents_task):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(orchestrator_task, agents_task, return_exceptions=True)
     except Exception as e:
         logger.error(f"Error running task agent system: {e}")
+        for task in (orchestrator_task, agents_task):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(orchestrator_task, agents_task, return_exceptions=True)
         raise
 
 if __name__ == '__main__':

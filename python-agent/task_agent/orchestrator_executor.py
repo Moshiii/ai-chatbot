@@ -15,7 +15,7 @@ from a2a.utils import new_agent_text_message, new_task
 from a2a.server.tasks import TaskUpdater
 from a2a.client import A2AClient
 from openai import AsyncOpenAI
-from common import log_error, Colors, log_a2a_api_call, log_a2a_protocol, create_agent_a2a_server, run_server, log_a2a_function_call, log_agent_activity, log_agent_request, log_agent_response
+from .common import log_error, Colors, log_a2a_api_call, log_a2a_protocol, create_agent_a2a_server, run_server, log_a2a_function_call, log_agent_activity, log_agent_request, log_agent_response
 import dotenv
 dotenv.load_dotenv()
 
@@ -60,9 +60,9 @@ class Orchestrator(AgentExecutor):
         # Define available A2A agents for task execution
         self.available_agents = {
             "trending": "http://localhost:10020",
-            "analyzer": "http://localhost:10021", 
+            "analyzer": "http://localhost:10021",
             "host": "http://localhost:10022",
-            # "market_analysis": "http://localhost:10023"
+            # "market_analysis": "http://localhost:10023"  # Disabled due to dependency issues
         }
         
         self._agent_info_cache: dict[str, dict[str, Any] | None] = {}
@@ -437,7 +437,7 @@ class Orchestrator(AgentExecutor):
         if any(keyword in task_lower for keyword in ["trend", "trending", "current", "popular", "viral"]):
             return "trending"
         elif any(keyword in task_lower for keyword in ["market", "stock", "financial", "investment", "trading"]):
-            return "market_analysis"
+            return "analyzer"  # market_analysis disabled due to dependency issues
         elif any(keyword in task_lower for keyword in ["analyze", "analysis", "research", "study"]):
             return "analyzer"
         else:

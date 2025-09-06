@@ -6,7 +6,7 @@ import httpx
 from a2a.client import A2AClient
 from a2a.types import AgentCard, MessageSendParams, SendMessageRequest
 from openai import AsyncOpenAI
-from common import log_error, Colors, log_a2a_api_call, log_a2a_protocol
+from .common import log_error, Colors, log_a2a_api_call, log_a2a_protocol
 import os
 import dotenv
 dotenv.load_dotenv()
