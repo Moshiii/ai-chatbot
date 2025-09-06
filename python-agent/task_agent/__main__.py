@@ -43,7 +43,7 @@ async def start_task_agent_server():
 
     client_agent_card = AgentCard(
         name="A2A Customized Task Agent",
-        url="http://localhost:10025",
+        url="http://localhost:9999",
         description="Intelligent task decomposition agent with real OpenAI integration and A2A agent orchestration",
         version="1.0",
         capabilities=AgentCapabilities(streaming=True),
