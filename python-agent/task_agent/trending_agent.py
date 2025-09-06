@@ -7,7 +7,7 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import TaskState, AgentCard, AgentCapabilities, AgentSkill
 from a2a.utils import new_agent_text_message, new_task
 
-from common import (
+from .common import (
     log_error,
     google_search,
     create_agent_a2a_server,
@@ -130,7 +130,7 @@ class TrendingAgentExecutor:
 
             raise ServerError(error=InternalError()) from e
 
-def main():
+def create_agent():
     trending_agent_card = AgentCard(
         name="Trending Topics Agent",
         url="http://localhost:10020",
@@ -153,10 +153,9 @@ def main():
             )
         ],
     )
+    return create_agent_a2a_server(TrendingAgentExecutor(), trending_agent_card)
 
-    def create_agent():
-        return create_agent_a2a_server(TrendingAgentExecutor(), trending_agent_card)
-
+def main():
     asyncio.run(run_server(create_agent, 10020, "Trending Agent"))
 
 if __name__ == "__main__":

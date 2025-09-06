@@ -4,8 +4,8 @@ import uuid
 import httpx
 from a2a.client import A2AClient
 from a2a.types import AgentCard, MessageSendParams, SendMessageRequest, AgentCapabilities, AgentSkill
-from common import log_error, log_a2a_api_call, log_a2a_protocol
-from orchestrator_executor import Orchestrator
+from .common import log_error, log_a2a_api_call, log_a2a_protocol
+from .orchestrator_executor import Orchestrator
 
 async def main():
     openai_api_key = os.getenv("OPENAI_API_KEY")

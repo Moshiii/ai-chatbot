@@ -7,7 +7,7 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import TaskState, AgentCard, AgentCapabilities, AgentSkill
 from a2a.utils import new_agent_text_message, new_task
 
-from common import (
+from .common import (
     log_error,
     create_agent_a2a_server,
     run_server,
@@ -149,7 +149,7 @@ class HostAgentExecutor:
 
             raise ServerError(error=InternalError()) from e
 
-def main():
+def create_agent():
     host_agent_card = AgentCard(
         name="Trend Analysis Host",
         url="http://localhost:10022",
@@ -172,12 +172,11 @@ def main():
             )
         ],
     )
+    return create_agent_a2a_server(
+        HostAgentExecutor("http://localhost:10020", "http://localhost:10021"), host_agent_card
+    )
 
-    def create_agent():
-        return create_agent_a2a_server(
-            HostAgentExecutor("http://localhost:10020", "http://localhost:10021"), host_agent_card
-        )
-
+def main():
     asyncio.run(run_server(create_agent, 10022, "Host Agent"))
 
 if __name__ == "__main__":
