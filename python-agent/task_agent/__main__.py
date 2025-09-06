@@ -13,7 +13,7 @@ from a2a.types import (
     AgentSkill,
 )
 from .agent_executor import TaskAgentExecutor
-from .client_customized_executor import ClientCustomizedExecutor
+from .orchestrator_executor import Orchestrator 
 from .agent_launcher import run_all_agents
 
 # Configure logging
@@ -68,7 +68,7 @@ async def start_task_agent_server():
 
     # Create request handler
     request_handler = DefaultRequestHandler(
-        agent_executor=ClientCustomizedExecutor(),
+        agent_executor=Orchestrator(),
         task_store=InMemoryTaskStore(),
     )
 
