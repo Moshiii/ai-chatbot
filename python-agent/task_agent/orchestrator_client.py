@@ -39,7 +39,7 @@ async def main():
     request = SendMessageRequest(id=request_id, params=MessageSendParams(**send_message_payload))
 
     # Use A2AClient to ensure protocol alignment
-    async with httpx.AsyncClient() as httpx_client:
+    async with httpx.AsyncClient(timeout=60.0) as httpx_client:  # Increased timeout to 60 seconds
         agent_card = AgentCard(
             name="A2A Customized Task Agent",
             url="http://localhost:9999",
@@ -65,7 +65,6 @@ async def main():
             ],
         )
 
-        
         client = A2AClient(httpx_client=httpx_client, agent_card=agent_card)
         log_a2a_protocol(f"Sending message to agent. Request ID: {request_id}, Message ID: {message_id}")
         response = await client.send_message(request)

@@ -446,82 +446,67 @@ class Orchestrator(AgentExecutor):
     async def _generate_jobs_with_openai(self, user_message: str) -> List[Dict[str, Any]]:
         """Generate jobs using OpenAI for intelligent task decomposition"""
         if not self.openai_client:
-            print(f"[TaskAgent] OpenAI client not available, falling back to rule-based generation")
+            print("[TaskAgent] OpenAI client not available, falling back to rule-based generation")
             return await self._generate_jobs_fallback(user_message)
 
-        print(f"[TaskAgent] Using OpenAI for intelligent task generation")
-        
-        # Enhanced prompt for better task generation
-        prompt = f"""
-        You are a professional task decomposition agent. Break down the following user request into 2-5 specific, actionable tasks.
+        print("[TaskAgent] Using OpenAI for intelligent task generation")
 
-        User Request: "{user_message}"
-
-        For each task, provide:
-        1. A clear, concise title
-        2. A detailed description of what needs to be done
-        3. The most appropriate agent type from: Project Analyst, Frontend Specialist, Backend Engineer, Database Architect, QA Engineer, Travel Planning Specialist, Data Scientist, ML Engineer, E-commerce Developer, Payment Security Specialist, Scraping Specialist, Data Engineer, API Architect, Mobile Developer, DevOps Engineer, Full-Stack Developer
-
-        Return the response as a JSON array of task objects with this structure:
-        [
-            {{
-                "title": "Task Title",
-                "description": "Detailed description of the task",
-                "assignedAgent": {{
-                    "name": "Agent Name",
-                    "description": "Agent expertise description",
-                    "capabilities": ["skill1", "skill2", "skill3"],
-                    "pricingUsdt": 2.5,
-                    "rating": 4.8,
-                    "completedTasks": 150
-                }}
-            }}
-        ]
-        """
-
+        prompt = (
+            "You are a professional task decomposition agent. Break down the following user request into 2-5 specific, actionable tasks.\n\n"
+            f'User Request: "{user_message}"\n\n'
+            "For each task, provide:\n"
+            "1. A clear, concise title\n"
+            "2. A detailed description\n"
+            "3. The most appropriate agent type from a provided list\n\n"
+            "Return a JSON array of task objects with following format:\n"
+            """[
+  {
+    "title": "Task Title",
+    "description": "Detailed description of the task",
+    "assignedAgent": {
+      "name": "Agent Name",
+      "description": "Agent expertise description",
+      "capabilities": ["skill1", "skill2", "skill3"],
+      "pricingUsdt": 2.5,
+      "rating": 4.8,
+      "completedTasks": 150
+    }
+  }
+]"""    
+        )
         response = await self.openai_client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": self.SYSTEM_INSTRUCTION},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=2000
+            max_tokens=2000,
+            response_format={"type": "json_object"}
         )
 
-        # Parse the OpenAI response
-        response_content = response.choices[0].message.content
-        print(f"[TaskAgent] OpenAI response length: {len(response_content)}")
+        content = response.choices[0].message.content
+        print(f"[TaskAgent] OpenAI response length: {len(content)}")
 
-        # Try to extract JSON from the response
-        # Look for JSON array in the response
-        start_idx = response_content.find('[')
-        end_idx = response_content.rfind(']') + 1
-        
-        if start_idx != -1 and end_idx != -1:
-            json_str = response_content[start_idx:end_idx]
-            jobs = json.loads(json_str)
-            
-            # Ensure each job has required fields and generate IDs
+        # Extract JSON array from response
+        start, end = content.find('['), content.rfind(']') + 1
+        if start != -1 and end != -1:
+            try:
+                jobs = json.loads(content[start:end])
+            except Exception as e:
+                raise ValueError(f"Failed to parse JSON from OpenAI response: {e}")
+
             for job in jobs:
-                if "id" not in job:
-                    job["id"] = str(uuid.uuid4())
-                if "status" not in job:
-                    job["status"] = "submitted"
-                
-                # Ensure assignedAgent has all required fields
-                if "assignedAgent" in job and isinstance(job["assignedAgent"], dict):
-                    agent = job["assignedAgent"]
-                    if "id" not in agent:
-                        agent["id"] = f"agent-{self._next_agent_id()}"
-                    if "walletAddress" not in agent:
-                        agent["walletAddress"] = f"0x{uuid.uuid4().hex[:40]}"
-            
+                job.setdefault("id", str(uuid.uuid4()))
+                job.setdefault("status", "submitted")
+                agent = job.get("assignedAgent")
+                if isinstance(agent, dict):
+                    agent.setdefault("id", f"agent-{self._next_agent_id()}")
+                    agent.setdefault("walletAddress", f"0x{uuid.uuid4().hex[:40]}")
             print(f"[TaskAgent] Successfully generated {len(jobs)} tasks using OpenAI")
             return jobs
-        else:
-            raise ValueError("No JSON array found in response")
-                    
+
+        raise ValueError("No JSON array found in response")
 
     async def cancel(self) -> None:
         """Cancel the current execution"""
