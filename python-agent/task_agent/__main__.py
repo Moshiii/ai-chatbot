@@ -1,6 +1,8 @@
 """Task Agent Server - Main entry point"""
 
 import uvicorn
+import asyncio
+import logging
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -11,9 +13,15 @@ from a2a.types import (
     AgentSkill,
 )
 from .agent_executor import TaskAgentExecutor
+from .client_customized_executor import ClientCustomizedExecutor
+from .agent_launcher import run_all_agents
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-if __name__ == '__main__':
+async def start_task_agent_server():
+    """Start the main task agent server"""
     # Define agent skills
     task_creation_skill = AgentSkill(
         id='create_task',
@@ -45,7 +53,7 @@ if __name__ == '__main__':
 
     # Create request handler
     request_handler = DefaultRequestHandler(
-        agent_executor=TaskAgentExecutor(),
+        agent_executor=ClientCustomizedExecutor(),
         task_store=InMemoryTaskStore(),
     )
 
@@ -58,5 +66,29 @@ if __name__ == '__main__':
     app = server.build()
 
     # Start server
-    print("[TaskAgent] Starting Task Agent Server on port 9999")
-    uvicorn.run(app, host="127.0.0.1", port=9999)
+    logger.info("[TaskAgent] Starting Task Agent Server on port 9999")
+    config = uvicorn.Config(app, host="127.0.0.1", port=9999, log_level="info")
+    server_instance = uvicorn.Server(config)
+    await server_instance.serve()
+
+async def main():
+    """Main entry point that starts both the task agent server and all other agents"""
+    logger.info("Starting Task Agent system...")
+    
+    # Create tasks for both the main server and all agents
+    tasks = [
+        start_task_agent_server(),
+        run_all_agents(),
+    ]
+    
+    try:
+        # Run both the main server and all agents concurrently
+        await asyncio.gather(*tasks)
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal, shutting down...")
+    except Exception as e:
+        logger.error(f"Error running task agent system: {e}")
+        raise
+
+if __name__ == '__main__':
+    asyncio.run(main())
