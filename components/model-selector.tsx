@@ -36,6 +36,17 @@ export function ModelSelector({
     availableChatModelIds.includes(chatModel.id),
   );
 
+  // Debug: Log available models
+  console.log(
+    '[ModelSelector] Available models:',
+    availableChatModels.map((m) => m.id),
+  );
+  console.log('[ModelSelector] Selected model:', optimisticModelId);
+  console.log(
+    '[ModelSelector] A2A enabled:',
+    process.env.NEXT_PUBLIC_ENABLE_A2A,
+  );
+
   const selectedChatModel = useMemo(
     () =>
       availableChatModels.find(

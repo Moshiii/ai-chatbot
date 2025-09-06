@@ -24,8 +24,8 @@ import { createDocument } from '@/lib/ai/tools/create-document';
 import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
-import { createTask } from '@/lib/ai/tools/create-task';
-import { updateTask } from '@/lib/ai/tools/update-task';
+import { requestA2AAgent } from '@/lib/ai/tools/request-a2a-agent';
+
 import { isProductionEnvironment } from '@/lib/constants';
 import { myProvider } from '@/lib/ai/providers';
 import { entitlementsByUserType } from '@/lib/ai/entitlements';
@@ -37,7 +37,7 @@ import {
 } from 'resumable-stream';
 import { after } from 'next/server';
 import { ChatSDKError } from '@/lib/errors';
-import type { ChatMessage } from '@/lib/types';
+import type { UIMessage } from 'ai';
 import type { ChatModel } from '@/lib/ai/models';
 import type { VisibilityType } from '@/components/visibility-selector';
 
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       selectedVisibilityType,
     }: {
       id: string;
-      message: ChatMessage;
+      message: UIMessage;
       selectedChatModel: ChatModel['id'];
       selectedVisibilityType: VisibilityType;
     } = requestBody;
@@ -157,50 +157,78 @@ export async function POST(request: Request) {
     const streamId = chatIds.generateStreamId().databaseId;
     await createStreamId({ streamId, chatId: id });
 
+    // Always use regular model provider (simplified architecture)
+    const modelProvider = myProvider.languageModel(selectedChatModel);
+
+    console.log(
+      `[Chat API] Using regular model provider: ${selectedChatModel}`,
+    );
+
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
         const result = streamText({
-          model: myProvider.languageModel(selectedChatModel),
+          model: modelProvider,
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
           stopWhen: stepCountIs(5),
           experimental_activeTools:
             selectedChatModel === 'chat-model-reasoning'
-              ? []
+              ? [] // No tools for reasoning mode
               : [
                   'getWeather',
-                  'createTask', // Primary tool for task planning
-                  'updateTask',
                   'createDocument', // Keep for non-task workflows
                   'updateDocument',
                   'requestSuggestions',
+                  'requestA2AAgent', // Integrated tool for A2A agent communication + task management
                 ],
           experimental_transform: smoothStream({ chunking: 'word' }),
-          tools: {
-            getWeather,
-            createTask: createTask({ session, dataStream }),
-            updateTask: updateTask({ session, dataStream }),
-            createDocument: createDocument({ session, dataStream }),
-            updateDocument: updateDocument({ session, dataStream }),
-            requestSuggestions: requestSuggestions({
-              session,
-              dataStream,
-            }),
-          },
+          tools:
+            selectedChatModel === 'chat-model-reasoning'
+              ? {} // No tools for reasoning mode
+              : {
+                  getWeather,
+                  createDocument: createDocument({ session, dataStream }),
+                  updateDocument: updateDocument({ session, dataStream }),
+                  requestSuggestions: requestSuggestions({
+                    session,
+                    dataStream,
+                  }),
+                  requestA2AAgent: requestA2AAgent({ session, dataStream }), // Integrated A2A communication + task management tool
+                },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
             functionId: 'stream-text',
           },
         });
 
+        console.log(
+          `[Chat API] Stream configuration for ${selectedChatModel}:`,
+          {
+            modelProvider: modelProvider?.modelId || 'unknown',
+            toolsDisabled: selectedChatModel === 'chat-model-reasoning',
+            activeToolsCount:
+              selectedChatModel === 'chat-model-reasoning' ? 0 : 5,
+            toolsObject:
+              selectedChatModel === 'chat-model-reasoning'
+                ? 'empty'
+                : 'populated',
+            hasA2ATool: selectedChatModel !== 'chat-model-reasoning',
+            integratedTaskFlow: selectedChatModel !== 'chat-model-reasoning',
+          },
+        );
+
         result.consumeStream();
 
+        console.log(
+          '[Chat API] 🔄 Merging result stream with UI message stream',
+        );
         dataStream.merge(
           result.toUIMessageStream({
             sendReasoning: true,
-            originalMessages: uiMessages, // Fix for AI SDK v5 to prevent repeated assistant messages with tools
+            originalMessages: uiMessages, // Required for AI SDK v5 proper artifact creation
           }),
         );
+        console.log('[Chat API] ✅ Stream merge completed');
       },
       generateId: () => chatIds.generateMessageId().databaseId,
       onFinish: async ({ messages }) => {

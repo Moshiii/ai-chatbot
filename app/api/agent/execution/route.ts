@@ -2,7 +2,7 @@ import { auth } from '@/app/(auth)/auth';
 import { ChatSDKError } from '@/lib/errors';
 import { a2a } from '@/lib/ai/a2a-provider';
 import { createUIMessageStream, JsonToSseTransformStream } from 'ai';
-import type { ChatMessage } from '@/lib/types';
+import type { UIMessage } from 'ai';
 
 export const maxDuration = 60;
 
@@ -18,11 +18,11 @@ interface AgentExecutionRequest {
  */
 export async function POST(request: Request) {
   console.log('[Agent Execution API] Received execution request');
-  
+
   try {
     // 1. Authentication
     const session = await auth();
-    
+
     if (!session?.user) {
       console.log('[Agent Execution API] Unauthorized - no session');
       return new ChatSDKError('unauthorized:auth').toResponse();
@@ -31,12 +31,17 @@ export async function POST(request: Request) {
     // 2. Parse request
     const body: AgentExecutionRequest = await request.json();
     const { taskId, executionMode = 'parallel' } = body;
-    console.log(`[Agent Execution API] Task: ${taskId}, Mode: ${executionMode}, User: ${session.user.id}`);
+    console.log(
+      `[Agent Execution API] Task: ${taskId}, Mode: ${executionMode}, User: ${session.user.id}`,
+    );
 
     // 3. Validate required fields
     if (!taskId) {
       console.log('[Agent Execution API] Missing taskId');
-      return new ChatSDKError('bad_request:api', 'Task ID is required').toResponse();
+      return new ChatSDKError(
+        'bad_request:api',
+        'Task ID is required',
+      ).toResponse();
     }
 
     // 4. Business Logic - Payment Processing (placeholder)
@@ -49,9 +54,11 @@ export async function POST(request: Request) {
       // - Process payment through payment provider
       // - Update user credits/balance
       // - Record transaction
-      
+
       // For now, just log and continue
-      console.log('[Agent Execution API] Payment processing placeholder - would charge user');
+      console.log(
+        '[Agent Execution API] Payment processing placeholder - would charge user',
+      );
     }
 
     // 5. Rate Limiting (placeholder)
@@ -59,25 +66,34 @@ export async function POST(request: Request) {
     const rateLimitExceeded = await checkRateLimit(session.user.id);
     if (rateLimitExceeded) {
       console.log('[Agent Execution API] Rate limit exceeded');
-      return new ChatSDKError('bad_request:api', 'Rate limit exceeded. Please try again later.').toResponse();
+      return new ChatSDKError(
+        'bad_request:api',
+        'Rate limit exceeded. Please try again later.',
+      ).toResponse();
     }
 
     // 6. Check A2A agent configuration
     const a2aAgentUrl = process.env.A2A_AGENT_URL;
     const enableA2A = process.env.ENABLE_A2A === 'true';
-    
+
     if (!enableA2A || !a2aAgentUrl) {
-      console.log('[Agent Execution API] A2A not enabled or URL not configured');
-      return new Response(JSON.stringify({
-        error: 'Agent execution not available',
-        message: 'Please set ENABLE_A2A=true and A2A_AGENT_URL in environment.',
-        taskId,
-      }), {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      console.log(
+        '[Agent Execution API] A2A not enabled or URL not configured',
+      );
+      return new Response(
+        JSON.stringify({
+          error: 'Agent execution not available',
+          message:
+            'Please set ENABLE_A2A=true and A2A_AGENT_URL in environment.',
+          taskId,
+        }),
+        {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
-    
+
     console.log(`[Agent Execution API] Using A2A agent at: ${a2aAgentUrl}`);
 
     // 7. Create A2A provider with streaming support
@@ -98,18 +114,25 @@ export async function POST(request: Request) {
       timestamp: new Date().toISOString(),
     };
 
-    console.log('[Agent Execution API] Sending to Python Task Agent:', executionMessage);
-    
+    console.log(
+      '[Agent Execution API] Sending to Python Task Agent:',
+      executionMessage,
+    );
+
     // 9. Create a data stream for real-time updates using AI SDK helper
-    const stream = createUIMessageStream<ChatMessage>({
+    const stream = createUIMessageStream<UIMessage>({
       execute: ({ writer }) => {
         (async () => {
           console.log('[Agent Execution API] Starting streaming execution');
           try {
             // Send initial status as text delta
-            writer.write({ 
-              type: 'data-textDelta', 
-              data: JSON.stringify({ type: 'execution-started', taskId, message: 'Starting agent execution' })
+            writer.write({
+              type: 'data-textDelta',
+              data: JSON.stringify({
+                type: 'execution-started',
+                taskId,
+                message: 'Starting agent execution',
+              }),
             });
 
             // Execute through Python agent
@@ -118,7 +141,10 @@ export async function POST(request: Request) {
                 {
                   role: 'user' as const,
                   content: [
-                    { type: 'text' as const, text: JSON.stringify(executionMessage) },
+                    {
+                      type: 'text' as const,
+                      text: JSON.stringify(executionMessage),
+                    },
                   ],
                 },
               ],
@@ -130,25 +156,28 @@ export async function POST(request: Request) {
               const { done, value } = await reader.read();
               if (done) break;
               if (value && typeof value === 'object') {
-                if (value.type === 'tool-call' && value.toolName === 'updateTask') {
+                if (
+                  value.type === 'tool-call' &&
+                  value.toolName === 'updateTask'
+                ) {
                   const toolArgs = JSON.parse((value as any).input || '{}');
                   if (toolArgs.jobResponse) {
                     // Forward job response update with standardized event type
-                    writer.write({ 
-                      type: 'data-textDelta', 
-                      data: JSON.stringify({ 
+                    writer.write({
+                      type: 'data-textDelta',
+                      data: JSON.stringify({
                         type: 'job-update',
-                        data: toolArgs.jobResponse 
-                      })
+                        data: toolArgs.jobResponse,
+                      }),
                     });
                   } else if (toolArgs.summary) {
                     // Forward summary update with standardized event type
-                    writer.write({ 
-                      type: 'data-textDelta', 
-                      data: JSON.stringify({ 
+                    writer.write({
+                      type: 'data-textDelta',
+                      data: JSON.stringify({
                         type: 'summary-update',
-                        data: toolArgs.summary 
-                      })
+                        data: toolArgs.summary,
+                      }),
                     });
                   }
                 }
@@ -156,40 +185,51 @@ export async function POST(request: Request) {
             }
 
             // Send completion status
-            writer.write({ 
-              type: 'data-textDelta', 
-              data: JSON.stringify({ type: 'execution-completed', taskId, message: 'Agent execution completed' })
+            writer.write({
+              type: 'data-textDelta',
+              data: JSON.stringify({
+                type: 'execution-completed',
+                taskId,
+                message: 'Agent execution completed',
+              }),
             });
             console.log('[Agent Execution API] Streaming execution completed');
           } catch (error: unknown) {
             console.error('[Agent Execution API] Streaming error:', error);
-            writer.write({ 
-              type: 'data-textDelta', 
-              data: JSON.stringify({ type: 'execution-error', error: (error as Error)?.message || 'Execution failed', taskId })
+            writer.write({
+              type: 'data-textDelta',
+              data: JSON.stringify({
+                type: 'execution-error',
+                error: (error as Error)?.message || 'Execution failed',
+                taskId,
+              }),
             });
           }
         })();
       },
     });
 
-    return new Response(
-      stream.pipeThrough(new JsonToSseTransformStream())
-    );
-    
+    return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
   } catch (error) {
     console.error('[Agent Execution API] Error:', error);
-    
+
     if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
-    
-    return new ChatSDKError('bad_request:api', 'Failed to execute agents').toResponse();
+
+    return new ChatSDKError(
+      'bad_request:api',
+      'Failed to execute agents',
+    ).toResponse();
   }
 }
 
 // Helper functions (placeholders for business logic)
 
-async function checkPaymentRequired(taskId: string, userId: string): Promise<boolean> {
+async function checkPaymentRequired(
+  taskId: string,
+  userId: string,
+): Promise<boolean> {
   // TODO: Implement actual payment logic
   // Check if user has credits, subscription, etc.
   // Calculate cost based on task complexity

@@ -16,8 +16,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { MessageEditor } from './message-editor';
 import { DocumentPreview } from './document-preview';
 import { MessageReasoning } from './message-reasoning';
-import type { UseChatHelpers } from '@ai-sdk/react';
-import type { ChatMessage } from '@/lib/types';
+import { TaskCollector } from './task-collector';
+
 import { useDataStream } from './data-stream-provider';
 
 // Type narrowing is handled by TypeScript's control flow analysis
@@ -34,18 +34,18 @@ const PurePreviewMessage = ({
   requiresScrollPadding,
 }: {
   chatId: string;
-  message: ChatMessage;
+  message: any; // Use any to avoid complex type constraints
   vote: Vote | undefined;
   isLoading: boolean;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  regenerate: UseChatHelpers<ChatMessage>['regenerate'];
+  setMessages: any;
+  regenerate: any;
   isReadonly: boolean;
   requiresScrollPadding: boolean;
 }) => {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
 
   const attachmentsFromMessage = message.parts.filter(
-    (part) => part.type === 'file',
+    (part: any) => part.type === 'file',
   );
 
   useDataStream();
@@ -86,7 +86,7 @@ const PurePreviewMessage = ({
                 data-testid={`message-attachments`}
                 className="flex flex-row justify-end gap-2"
               >
-                {attachmentsFromMessage.map((attachment) => (
+                {attachmentsFromMessage.map((attachment: any) => (
                   <PreviewAttachment
                     key={attachment.url}
                     attachment={{
@@ -99,7 +99,7 @@ const PurePreviewMessage = ({
               </div>
             )}
 
-            {message.parts?.map((part, index) => {
+            {message.parts?.map((part: any, index: number) => {
               const { type } = part;
               const key = `message-${message.id}-part-${index}`;
 
@@ -170,7 +170,10 @@ const PurePreviewMessage = ({
 
                 if (state === 'input-available') {
                   return (
-                    <div key={`weather-input-${toolCallId}`} className="skeleton">
+                    <div
+                      key={`weather-input-${toolCallId}`}
+                      className="skeleton"
+                    >
                       <Weather />
                     </div>
                   );
@@ -214,43 +217,6 @@ const PurePreviewMessage = ({
 
                   return (
                     <div key={`create-doc-output-${toolCallId}`}>
-                      <DocumentPreview
-                        isReadonly={isReadonly}
-                        result={output}
-                      />
-                    </div>
-                  );
-                }
-              }
-
-              if (type === 'tool-createTask') {
-                const { toolCallId, state } = part;
-
-                if (state === 'input-available') {
-                  const { input } = part;
-                  return (
-                    <div key={`create-task-input-${toolCallId}`}>
-                      <DocumentPreview isReadonly={isReadonly} args={input} />
-                    </div>
-                  );
-                }
-
-                if (state === 'output-available') {
-                  const { output } = part;
-
-                  if ('error' in output) {
-                    return (
-                      <div
-                        key={`create-task-error-${toolCallId}`}
-                        className="text-red-500 p-2 border rounded"
-                      >
-                        Error: {String(output.error)}
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div key={`create-task-output-${toolCallId}`}>
                       <DocumentPreview
                         isReadonly={isReadonly}
                         result={output}
@@ -344,7 +310,151 @@ const PurePreviewMessage = ({
                   );
                 }
               }
+
+              if (type === 'tool-requestA2AAgent') {
+                const { toolCallId, state } = part;
+
+                if (state === 'input-available') {
+                  const { input } = part;
+                  return (
+                    <div key={`a2a-input-${toolCallId}`}>
+                      <div className="bg-muted/50 border rounded-xl p-4 w-fit max-w-2xl">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="size-4 bg-purple-500 rounded animate-pulse" />
+                          <span className="text-sm font-medium">
+                            A2A Agent Planning
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Requesting specialized agents for:{' '}
+                          {input.userRequirements}
+                        </p>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Priority: {input.urgency || 'medium'}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (state === 'output-available') {
+                  const { output } = part;
+
+                  if ('error' in output) {
+                    return (
+                      <div
+                        key={`a2a-error-${toolCallId}`}
+                        className="text-red-500 p-2 border rounded"
+                      >
+                        Error: {String(output.error)}
+                      </div>
+                    );
+                  }
+
+                  // Display Canvas artifact as clickable document
+                  if (output.kind === 'canvas') {
+                    return (
+                      <div key={`a2a-canvas-output-${toolCallId}`}>
+                        <DocumentToolResult
+                          type="create"
+                          result={{
+                            id: output.id,
+                            title: output.title,
+                            kind: output.kind,
+                          }}
+                          isReadonly={isReadonly}
+                        />
+                      </div>
+                    );
+                  }
+
+                  // Handle other A2A outputs
+                  return (
+                    <div
+                      key={`a2a-output-${toolCallId}`}
+                      className="bg-green-50 border border-green-200 rounded-xl p-4 w-fit max-w-2xl"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="size-4 bg-green-500 rounded" />
+                        <span className="text-sm font-medium">
+                          A2A Task Completed
+                        </span>
+                      </div>
+                      <p className="text-sm">
+                        {output.content ||
+                          `Created ${output.taskCount || 0} tasks`}
+                      </p>
+                    </div>
+                  );
+                }
+              }
             })}
+
+            {/* Canvas preview for messages that reference canvas documents */}
+            {(() => {
+              const canvasPart = message.parts.find(
+                (
+                  part: any,
+                ): part is {
+                  type: 'data-canvasReference';
+                  data: { artifactType: 'document'; documentId: string };
+                } => part.type === 'data-canvasReference',
+              );
+              return canvasPart ? (
+                <div className="mt-4 p-4 border rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="size-4 bg-blue-500 rounded" />
+                    <span className="text-sm font-medium">
+                      Task Planning Canvas
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    A canvas has been created to organize and track your tasks.
+                    The agent will populate it with tasks and execution results.
+                  </p>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Document ID: {canvasPart.data.documentId}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
+            {/* Handle data-task parts for A2A task collection */}
+            {(() => {
+              const taskParts = message.parts.filter(
+                (part: any) => part.type === 'data-task' && part.data?.task,
+              );
+              return taskParts.length > 0 ? (
+                <TaskCollector
+                  taskParts={taskParts}
+                  chatId={chatId}
+                  onCanvasCreated={(canvas) => {
+                    // Update the message to include canvas reference
+                    setMessages((prevMessages: any[]) =>
+                      prevMessages.map((msg) =>
+                        msg.id === message.id
+                          ? {
+                              ...msg,
+                              parts: [
+                                ...msg.parts,
+                                {
+                                  type: 'data-canvasReference',
+                                  data: {
+                                    artifactType: 'document',
+                                    documentId: canvas.id,
+                                    taskIds: canvas.taskIds,
+                                    webhookToken: canvas.webhookToken,
+                                  },
+                                },
+                              ],
+                            }
+                          : msg,
+                      ),
+                    );
+                  }}
+                />
+              ) : null;
+            })()}
 
             {!isReadonly && (
               <MessageActions

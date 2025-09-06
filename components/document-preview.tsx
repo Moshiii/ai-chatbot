@@ -99,6 +99,7 @@ export function DocumentPreview({
           id: artifact.documentId,
           createdAt: new Date(),
           userId: 'noop',
+          taskIds: [],
         }
       : null;
 
@@ -290,8 +291,12 @@ const DocumentContent = ({ document }: { document: Document }) => {
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <div className="text-2xl mb-2">📋</div>
-              <div className="text-sm text-muted-foreground">Task Decomposition Canvas</div>
-              <div className="text-xs text-muted-foreground mt-1">Click to open</div>
+              <div className="text-sm text-muted-foreground">
+                Task Decomposition Canvas
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Click to open
+              </div>
             </div>
           </div>
         </div>

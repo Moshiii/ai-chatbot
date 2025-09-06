@@ -1,11 +1,13 @@
 import NextAuth, { type DefaultSession } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { createGuestUser, db } from '@/lib/db/queries';
+import {
+  createGuestUser,
+  findOrCreateOAuthUser,
+  upgradeGuestToRegularUser,
+} from '@/lib/db/queries';
 import { authConfig } from './auth.config';
 import type { DefaultJWT } from 'next-auth/jwt';
 import GitHub from 'next-auth/providers/github';
-import { user } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
 
 export type UserType = 'guest' | 'regular';
 
@@ -64,67 +66,105 @@ export const {
   ],
   callbacks: {
     async jwt({ token, user: authUser, account }) {
-      if (authUser) {
-        token.id = authUser.id as string;
-        token.type = authUser.type;
-        token.creditBalance = authUser.creditBalance;
-      }
-
-      // Handle GitHub OAuth user creation
-      if (account?.provider === 'github' && !token.id && token.email) {
-        try {
-          // Check if user already exists
-          const existingUsers = await db
-            .select()
-            .from(user)
-            .where(eq(user.email, token.email));
-
-          if (existingUsers.length > 0) {
-            // User exists, use their data
-            const existingUser = existingUsers[0];
-            token.id = existingUser.id;
-            token.type = 'regular';
-            token.creditBalance = existingUser.creditBalance;
-          } else {
-            // Create new user for GitHub OAuth
-            const [newUser] = await db
-              .insert(user)
-              .values({
-                email: token.email,
-                creditBalance: '0.00',
-              })
-              .returning({
-                id: user.id,
-                email: user.email,
-                creditBalance: user.creditBalance,
-              });
-
-            token.id = newUser.id;
-            token.type = 'regular';
-            token.creditBalance = newUser.creditBalance;
-          }
-        } catch (error) {
-          console.error('Error creating/finding GitHub user:', error);
+      try {
+        if (authUser) {
+          token.id = authUser.id as string;
+          token.type = authUser.type;
+          token.creditBalance = authUser.creditBalance;
         }
-      }
 
-      return token;
+        // Handle GitHub OAuth user creation/authentication
+        if (account?.provider === 'github' && token.email) {
+          try {
+            let authenticatedUser = null;
+
+            // Check if we have an existing user ID (from guest session)
+            if (token.id) {
+              // This is a guest user upgrading to regular user
+              console.log(
+                `Attempting to upgrade guest user ${token.id} to regular user with email ${token.email}`,
+              );
+              try {
+                authenticatedUser = await upgradeGuestToRegularUser(
+                  token.id,
+                  token.email,
+                );
+                if (authenticatedUser) {
+                  console.log(
+                    `Successfully upgraded guest user to regular user with ID ${authenticatedUser.id}`,
+                  );
+                }
+              } catch (upgradeError) {
+                console.warn(
+                  `Failed to upgrade guest user ${token.id}, falling back to new user creation:`,
+                  upgradeError,
+                );
+              }
+            }
+
+            // If upgrade failed or this is a new user, create/find OAuth user
+            if (!authenticatedUser) {
+              console.log(
+                `Creating/finding OAuth user for email ${token.email}`,
+              );
+              authenticatedUser = await findOrCreateOAuthUser(token.email);
+              if (authenticatedUser) {
+                console.log(
+                  `Successfully authenticated GitHub user ${token.email} with ID ${authenticatedUser.id}`,
+                );
+              }
+            }
+
+            // Update token with authenticated user data
+            if (authenticatedUser) {
+              token.id = authenticatedUser.id;
+              token.type = 'regular';
+              token.creditBalance = authenticatedUser.creditBalance;
+            } else {
+              console.error(
+                'Failed to authenticate user - no user returned from database operations',
+              );
+              // Keep existing token data to prevent breaking the session
+            }
+          } catch (error) {
+            console.error('Error handling GitHub OAuth user:', error);
+            // Don't throw here - let authentication continue with existing token data
+            // The error will be logged but won't break the auth flow
+          }
+        }
+
+        return token;
+      } catch (error) {
+        console.error('JWT callback error:', error);
+        // Return token even on error to prevent auth failures
+        return token;
+      }
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id;
-        session.user.type = token.type;
-        session.user.creditBalance = token.creditBalance;
-      }
+      try {
+        if (session.user) {
+          session.user.id = token.id;
+          session.user.type = token.type;
+          session.user.creditBalance = token.creditBalance;
+        }
 
-      return session;
+        return session;
+      } catch (error) {
+        console.error('Session callback error:', error);
+        return session;
+      }
     },
     async signIn({ user, account }) {
-      // Ensure GitHub users get the 'regular' type
-      if (account?.provider === 'github') {
-        user.type = 'regular';
+      try {
+        // Ensure GitHub users get the 'regular' type
+        if (account?.provider === 'github') {
+          user.type = 'regular';
+        }
+        return true;
+      } catch (error) {
+        console.error('SignIn callback error:', error);
+        return false; // Deny sign in on error
       }
-      return true;
     },
     async redirect({ url, baseUrl }) {
       // After successful login, redirect to the main chat page

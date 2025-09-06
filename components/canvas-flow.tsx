@@ -42,7 +42,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -139,14 +138,17 @@ interface CanvasFlowProps {
   onSummarize: () => void;
   isGenerating?: boolean;
   allAgentsExecuted?: boolean;
+  documentTitle?: string; // Title of the Canvas document
 }
 
 // Custom Task Decomposition Title Node Component with Vertical Handles
 const TaskDecompositionTitleNode = ({
   data,
-}: { data: { isGenerating?: boolean } }) => {
+}: { data: { isGenerating?: boolean; documentTitle?: string } }) => {
+  const displayTitle = data?.documentTitle || 'Task Decomposition';
+
   return (
-    <Card className="w-64 bg-white shadow-lg border-2 border-purple-200 relative">
+    <Card className="w-80 bg-white shadow-lg border-2 border-purple-200 relative">
       {/* Output handle on the bottom */}
       <Handle
         type="source"
@@ -160,13 +162,13 @@ const TaskDecompositionTitleNode = ({
 
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold text-purple-800">
-            Task Decomposition
+          <CardTitle className="text-sm font-semibold text-purple-800 flex-1 pr-2">
+            {displayTitle}
           </CardTitle>
           {data?.isGenerating && (
             <Badge
               variant="secondary"
-              className="bg-purple-100 text-purple-800 text-xs"
+              className="bg-purple-100 text-purple-800 text-xs shrink-0"
             >
               <ClockIcon className="size-3 mr-1" />
               Generating
@@ -185,7 +187,7 @@ const TaskDecompositionTitleNode = ({
 const TaskNode = ({ data }: { data: { task: Task } }) => {
   const [expanded, setExpanded] = useState(false);
   return (
-    <Card className="w-64 bg-white shadow-lg border-2 border-blue-200 relative">
+    <Card className="w-80 bg-white shadow-lg border-2 border-blue-200 relative">
       {/* Input handles */}
       <Handle
         type="target"
@@ -226,70 +228,130 @@ const TaskNode = ({ data }: { data: { task: Task } }) => {
         }}
       />
 
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold text-blue-800">
-            {data.task.title}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {data.task.status === 'pending' && (
-              <Badge
-                variant="secondary"
-                className="bg-yellow-100 text-yellow-800 text-xs"
-              >
-                <ClockIcon className="size-3 mr-1" />
-                Pending
-              </Badge>
-            )}
-            {data.task.status === 'recruiting' && (
-              <Badge
-                variant="secondary"
-                className="bg-purple-100 text-purple-800 text-xs"
-              >
-                <UserPlusIcon className="size-3 mr-1" />
-                Recruiting
-              </Badge>
-            )}
-            {data.task.status === 'in-progress' && (
-              <Badge
-                variant="secondary"
-                className="bg-blue-100 text-blue-800 text-xs"
-              >
-                <PlayIcon className="size-3 mr-1" />
-                Active
-              </Badge>
-            )}
-            {data.task.status === 'completed' && (
-              <Badge
-                variant="secondary"
-                className="bg-green-100 text-green-800 text-xs"
-              >
-                <CheckIcon className="size-3 mr-1" />
-                Completed
-              </Badge>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setExpanded((prev) => !prev)}
-              className="size-6 p-0"
-              aria-label={
-                expanded ? 'Collapse task details' : 'Expand task details'
-              }
-            >
-              {expanded ? (
-                <ChevronUp className="size-4" />
-              ) : (
-                <ChevronDown className="size-4" />
+      <CardHeader className="pb-3">
+        <div className="space-y-2">
+          {/* Title row with status and expand button */}
+          <div className="flex items-start justify-between gap-2">
+            <CardTitle className="text-sm font-semibold text-blue-800 flex-1">
+              {data.task.title}
+            </CardTitle>
+            <div className="flex items-center gap-2 shrink-0">
+              {data.task.status === 'pending' && (
+                <Badge
+                  variant="secondary"
+                  className="bg-yellow-100 text-yellow-800 text-xs"
+                >
+                  <ClockIcon className="size-3 mr-1" />
+                  Pending
+                </Badge>
               )}
-            </Button>
+              {data.task.status === 'recruiting' && (
+                <Badge
+                  variant="secondary"
+                  className="bg-purple-100 text-purple-800 text-xs"
+                >
+                  <UserPlusIcon className="size-3 mr-1" />
+                  Recruiting
+                </Badge>
+              )}
+              {data.task.status === 'in-progress' && (
+                <Badge
+                  variant="secondary"
+                  className="bg-blue-100 text-blue-800 text-xs"
+                >
+                  <PlayIcon className="size-3 mr-1" />
+                  Active
+                </Badge>
+              )}
+              {data.task.status === 'completed' && (
+                <Badge
+                  variant="secondary"
+                  className="bg-green-100 text-green-800 text-xs"
+                >
+                  <CheckIcon className="size-3 mr-1" />
+                  Completed
+                </Badge>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setExpanded((prev) => !prev)}
+                className="size-6 p-0"
+                aria-label={
+                  expanded ? 'Collapse task details' : 'Expand task details'
+                }
+              >
+                {expanded ? (
+                  <ChevronUp className="size-4" />
+                ) : (
+                  <ChevronDown className="size-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Description row - full width */}
+          <div className="text-xs text-gray-600 leading-relaxed">
+            {data.task.description}
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-0 space-y-3">
+        {/* Execute Button - Always Visible */}
+        <Button
+          onClick={() => {
+            console.log(`Execute task: ${data.task.id}`);
+            // TODO: Add actual backend execution logic
+          }}
+          disabled={
+            data.task.status === 'completed' ||
+            data.task.status === 'in-progress'
+          }
+          className={`w-full ${
+            data.task.status === 'completed'
+              ? 'bg-green-100 text-green-800 cursor-not-allowed'
+              : data.task.status === 'in-progress'
+                ? 'bg-blue-100 text-blue-800 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+          }`}
+          size="sm"
+        >
+          {data.task.status === 'completed' && (
+            <>
+              <CheckIcon className="size-4 mr-2" />
+              Completed
+            </>
+          )}
+          {data.task.status === 'in-progress' && (
+            <>
+              <PlayIcon className="size-4 mr-2" />
+              Running...
+            </>
+          )}
+          {(data.task.status === 'pending' ||
+            data.task.status === 'recruiting') && (
+            <>
+              <PlayIcon className="size-4 mr-2" />
+              Execute Task
+            </>
+          )}
+        </Button>
+
+        {/* Expanded Details */}
         {expanded && (
-          <div className="text-xs text-gray-600 mb-2">
-            {data.task.description}
+          <div className="space-y-2">
+            <div className="text-xs text-gray-500">
+              <div className="font-medium mb-1">Task Details:</div>
+              <div className="space-y-1">
+                <div>
+                  <span className="font-medium">ID:</span> {data.task.id}
+                </div>
+                <div>
+                  <span className="font-medium">Status:</span>{' '}
+                  {data.task.status}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </CardContent>
@@ -532,6 +594,7 @@ export function CanvasFlow({
   onSummarize,
   isGenerating = false,
   allAgentsExecuted = false,
+  documentTitle,
 }: CanvasFlowProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -596,16 +659,10 @@ export function CanvasFlow({
     nodePositionsRef.current.set(node.id, node.position);
   }, []);
 
-  // Update nodes and edges when tasks, agents, responses, and summary change during streaming
+  // Update nodes and edges when tasks, agents, responses change
   useEffect(() => {
-    // eslint-disable-line react-hooks/exhaustive-deps
     const newNodes: Node[] = [];
-
-    // Clear existing edges to prevent conflicts
-    console.log(
-      'Current edges before clearing:',
-      edges.map((edge) => edge.id),
-    );
+    const newEdges: Edge[] = [];
 
     // Add Task Decomposition title node
     newNodes.push({
@@ -614,7 +671,7 @@ export function CanvasFlow({
       position:
         nodePositionsRef.current.get('task-decomposition-title') ||
         LAYOUT.INITIAL.TITLE,
-      data: { isGenerating },
+      data: { isGenerating, documentTitle },
     });
 
     // Add individual Task nodes in a vertical chain with proper spacing for edge visibility
@@ -694,11 +751,6 @@ export function CanvasFlow({
       });
     }
 
-    setNodes(newNodes);
-
-    // Create edges connecting tasks to agents
-    const newEdges: Edge[] = [];
-
     // Create task chain: title -> task1 -> task2 -> task3 -> task4 (vertical)
     if (tasks.length > 0) {
       // Connect title to first task
@@ -731,12 +783,10 @@ export function CanvasFlow({
           type: 'default',
           style: STYLES.EDGES.TASK_TO_SUMMARY,
         });
-        console.log('Created last task to summary edge:', `ts-${lastTaskId}`);
       }
     }
 
     // Create task-agent connections for associated agents
-    // Filter out duplicate agents by ID to prevent edge conflicts
     const uniqueAgents = agents.filter(
       (agent, index, self) =>
         index === self.findIndex((a) => a.id === agent.id),
@@ -753,7 +803,6 @@ export function CanvasFlow({
 
         if (taskNodeExists && agentNodeExists) {
           const edgeId = `ta-${agent.taskId}-${agent.id}`;
-          // Check if this edge already exists to prevent duplicates
           const edgeExists = newEdges.some((edge) => edge.id === edgeId);
 
           if (!edgeExists) {
@@ -766,22 +815,12 @@ export function CanvasFlow({
               type: 'default',
               style: STYLES.EDGES.TASK_TO_AGENT,
             });
-            console.log(
-              'Created task-agent edge:',
-              edgeId,
-              'for agent:',
-              agent.id,
-              'task:',
-              agent.taskId,
-            );
-          } else {
-            console.log('Skipping duplicate task-agent edge:', edgeId);
           }
         }
       }
     });
 
-    // Connect agents to their responses horizontally
+    // Connect agents to their responses
     responses.forEach((response) => {
       const agentNodeExists = newNodes.some(
         (n) => n.id === `agent-${response.agentId}`,
@@ -792,7 +831,6 @@ export function CanvasFlow({
 
       if (agentNodeExists && responseNodeExists) {
         const edgeId = `ar-${response.agentId}-${response.id}`;
-        // Check if this edge already exists to prevent duplicates
         const edgeExists = newEdges.some((edge) => edge.id === edgeId);
 
         if (!edgeExists) {
@@ -805,25 +843,12 @@ export function CanvasFlow({
             type: 'default',
             style: STYLES.EDGES.AGENT_TO_RESPONSE,
           });
-          console.log('Created horizontal agent-response edge:', edgeId);
         }
-      } else {
-        console.log('Skipping response edge - nodes not ready:', {
-          agentNodeExists,
-          responseNodeExists,
-          responseId: response.id,
-        });
       }
     });
 
-    // Note: We no longer auto-connect responses to summary
-    // The summary will be connected to the last task automatically
-
-    console.log('Total edges created:', newEdges.length);
-    console.log(
-      'All edge IDs:',
-      newEdges.map((edge) => edge.id),
-    );
+    // Update both nodes and edges atomically to prevent flickering
+    setNodes(newNodes);
     setEdges(newEdges);
   }, [
     tasks,
@@ -831,15 +856,13 @@ export function CanvasFlow({
     responses,
     summary,
     onSummarize,
-    setNodes,
-    setEdges,
     isGenerating,
-    // Note: 'edges' is intentionally excluded to prevent infinite loops
+    documentTitle,
   ]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+    [],
   );
 
   return (
@@ -881,122 +904,118 @@ export function CanvasFlow({
             <AlertDialogTitle>
               Confirm Batch Transaction - Execute All Agents
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {
-                <div className="space-y-4 text-sm">
-                  {/* Agents to Execute */}
-                  <div>
-                    <div className="font-medium text-base mb-2">
-                      Agents to Execute ({agents.length})
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
-                      {agents.map((agent, index) => {
-                        const price =
-                          typeof agent.pricingUsdt === 'number'
-                            ? agent.pricingUsdt
-                            : (() => {
-                                let hash = 0;
-                                const seed = `${agent.id}:${agent.name}`;
-                                for (let i = 0; i < seed.length; i++) {
-                                  hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-                                }
-                                const min = 0.25;
-                                const max = 2.5;
-                                const normalized = (hash % 1000) / 1000;
-                                return (
-                                  Math.round(
-                                    (min + normalized * (max - min)) * 100,
-                                  ) / 100
-                                );
-                              })();
-                        return (
-                          <div
-                            key={agent.id}
-                            className="flex justify-between items-center"
-                          >
-                            <span className="font-medium">
-                              {index + 1}. {agent.name}
-                            </span>
-                            <span className="text-gray-600">
-                              ${price.toFixed(2)} USDT
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Transaction Summary */}
-                  <div className="border-t pt-3">
-                    <div className="grid grid-cols-3 gap-x-4 gap-y-2">
-                      <div className="text-muted-foreground">Network</div>
-                      <div className="col-span-2">{networkName}</div>
-
-                      <div className="text-muted-foreground">From</div>
-                      <div className="col-span-2">Your wallet</div>
-
-                      <div className="text-muted-foreground">Token</div>
-                      <div className="col-span-2">{tokenSymbol}</div>
-
-                      <div className="text-muted-foreground">Total Amount</div>
-                      <div className="col-span-2 font-bold text-lg">
-                        ${calculateTotalCost().toFixed(2)} USDT
-                      </div>
-
-                      <div className="text-muted-foreground">Network fee</div>
-                      <div className="col-span-2">
-                        ~{(estimatedGasEth * agents.length).toFixed(6)} ETH (
-                        {agents.length} transactions)
-                      </div>
-
-                      <div className="text-muted-foreground">Est. time</div>
-                      <div className="col-span-2">{estimatedConfirmation}</div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
-                      onClick={() => setShowAdvancedTxDetails((v) => !v)}
-                    >
-                      {showAdvancedTxDetails ? (
-                        <ChevronUp className="size-3" />
-                      ) : (
-                        <ChevronDown className="size-3" />
-                      )}
-                      {showAdvancedTxDetails
-                        ? 'Hide advanced details'
-                        : 'Show advanced details'}
-                    </button>
-                    {showAdvancedTxDetails && (
-                      <div className="mt-2 rounded-md border p-3 space-y-1 text-xs">
-                        <div>
-                          <span className="font-medium">Batch Execution:</span>{' '}
-                          {agents.length} agents
-                        </div>
-                        <div>
-                          <span className="font-medium">Method:</span>{' '}
-                          executeAllAgents()
-                        </div>
-                        <div>
-                          <span className="font-medium">Total Tasks:</span>{' '}
-                          {tasks.length}
-                        </div>
-                        <div className="text-muted-foreground">
-                          All agents will be executed in parallel via the Python
-                          orchestrator.
-                        </div>
-                        <div className="text-muted-foreground">
-                          You will be asked to confirm this batch transaction in
-                          your wallet.
-                        </div>
-                      </div>
-                    )}
-                  </div>
+            <div className="space-y-4 text-sm text-muted-foreground">
+              {/* Agents to Execute */}
+              <div>
+                <div className="font-medium text-base mb-2">
+                  Agents to Execute ({agents.length})
                 </div>
-              }
-            </AlertDialogDescription>
+                <div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+                  {agents.map((agent, index) => {
+                    const price =
+                      typeof agent.pricingUsdt === 'number'
+                        ? agent.pricingUsdt
+                        : (() => {
+                            let hash = 0;
+                            const seed = `${agent.id}:${agent.name}`;
+                            for (let i = 0; i < seed.length; i++) {
+                              hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+                            }
+                            const min = 0.25;
+                            const max = 2.5;
+                            const normalized = (hash % 1000) / 1000;
+                            return (
+                              Math.round(
+                                (min + normalized * (max - min)) * 100,
+                              ) / 100
+                            );
+                          })();
+                    return (
+                      <div
+                        key={agent.id}
+                        className="flex justify-between items-center"
+                      >
+                        <span className="font-medium">
+                          {index + 1}. {agent.name}
+                        </span>
+                        <span className="text-gray-600">
+                          ${price.toFixed(2)} USDT
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Transaction Summary */}
+              <div className="border-t pt-3">
+                <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+                  <div className="text-muted-foreground">Network</div>
+                  <div className="col-span-2">{networkName}</div>
+
+                  <div className="text-muted-foreground">From</div>
+                  <div className="col-span-2">Your wallet</div>
+
+                  <div className="text-muted-foreground">Token</div>
+                  <div className="col-span-2">{tokenSymbol}</div>
+
+                  <div className="text-muted-foreground">Total Amount</div>
+                  <div className="col-span-2 font-bold text-lg">
+                    ${calculateTotalCost().toFixed(2)} USDT
+                  </div>
+
+                  <div className="text-muted-foreground">Network fee</div>
+                  <div className="col-span-2">
+                    ~{(estimatedGasEth * agents.length).toFixed(6)} ETH (
+                    {agents.length} transactions)
+                  </div>
+
+                  <div className="text-muted-foreground">Est. time</div>
+                  <div className="col-span-2">{estimatedConfirmation}</div>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
+                  onClick={() => setShowAdvancedTxDetails((v) => !v)}
+                >
+                  {showAdvancedTxDetails ? (
+                    <ChevronUp className="size-3" />
+                  ) : (
+                    <ChevronDown className="size-3" />
+                  )}
+                  {showAdvancedTxDetails
+                    ? 'Hide advanced details'
+                    : 'Show advanced details'}
+                </button>
+                {showAdvancedTxDetails && (
+                  <div className="mt-2 rounded-md border p-3 space-y-1 text-xs">
+                    <div>
+                      <span className="font-medium">Batch Execution:</span>{' '}
+                      {agents.length} agents
+                    </div>
+                    <div>
+                      <span className="font-medium">Method:</span>{' '}
+                      executeAllAgents()
+                    </div>
+                    <div>
+                      <span className="font-medium">Total Tasks:</span>{' '}
+                      {tasks.length}
+                    </div>
+                    <div className="text-muted-foreground">
+                      All agents will be executed in parallel via the Python
+                      orchestrator.
+                    </div>
+                    <div className="text-muted-foreground">
+                      You will be asked to confirm this batch transaction in
+                      your wallet.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setIsTxDialogOpen(false)}>

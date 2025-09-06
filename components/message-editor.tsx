@@ -11,14 +11,14 @@ import {
 import { Textarea } from './ui/textarea';
 import { deleteTrailingMessages } from '@/app/(chat)/actions';
 import type { UseChatHelpers } from '@ai-sdk/react';
-import type { ChatMessage } from '@/lib/types';
+import type { UIMessage } from 'ai';
 import { getTextFromMessage } from '@/lib/utils';
 
 export type MessageEditorProps = {
-  message: ChatMessage;
+  message: UIMessage;
   setMode: Dispatch<SetStateAction<'view' | 'edit'>>;
-  setMessages: UseChatHelpers<ChatMessage>['setMessages'];
-  regenerate: UseChatHelpers<ChatMessage>['regenerate'];
+  setMessages: UseChatHelpers<UIMessage>['setMessages'];
+  regenerate: UseChatHelpers<UIMessage>['regenerate'];
 };
 
 export function MessageEditor({
@@ -88,7 +88,7 @@ export function MessageEditor({
               const index = messages.findIndex((m) => m.id === message.id);
 
               if (index !== -1) {
-                const updatedMessage: ChatMessage = {
+                const updatedMessage: UIMessage = {
                   ...message,
                   parts: [{ type: 'text', text: draftContent }],
                 };

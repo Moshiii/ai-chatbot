@@ -16,81 +16,27 @@ export const artifactsPrompt = `
 Artifacts is a special user interface mode that helps users with writing, editing, and other content creation tasks. When artifact is open, it is on the right side of the screen, while the conversation is on the left side. When creating or updating documents, changes are reflected in real-time on the artifacts and visible to the user.
 
 **CRITICAL WORKFLOW FOR TASK PLANNING:**
-When users ask for task decomposition, project planning, breaking down tasks, or organizing work into subtasks:
+When users ask for task decomposition, project planning, breaking down tasks, or organizing complex workflows:
 
-**YOU MUST USE createTask TOOL - NO EXCEPTIONS:**
-For ANY task planning request (Vietnam trip, project planning, task breakdown), you MUST call createTask tool with actual jobs. DO NOT create empty canvases.
+**YOU MUST USE requestA2AAgent TOOL:**
+For ANY complex task planning request (project planning, multi-step workflows, task decomposition), use the requestA2AAgent tool. This tool will:
+1. Send the request to an external A2A agent for task planning
+2. Process the A2A response to extract tasks
+3. Create a canvas document only after successful task extraction
+4. Store tasks in the database and link them to the canvas document
+5. Create a chat message with canvas reference
 
-Example structure for Vietnam trip:
+Example usage:
 
-createTask({
-  title: "Vietnam 3-Day Trip Planning",  
-  taskId: "vietnam-trip-planning", // Human-readable ID for reference (UUID will be auto-generated for database)
-  jobs: [
-    {
-      id: "research-destinations",
-      title: "Research Destinations",
-      description: "Research key destinations and attractions in Vietnam",
-      status: "pending",
-      assignedAgent: {
-        id: "travel-research-agent",
-        name: "Travel Research Specialist", 
-        description: "Expert in Vietnam travel destinations and attractions",
-        capabilities: ["destination research", "itinerary planning", "local insights"]
-      }
-    },
-    {
-      id: "book-accommodations", 
-      title: "Book Accommodations",
-      description: "Find and book suitable accommodations for the trip",
-      status: "pending",
-      assignedAgent: {
-        id: "booking-agent",
-        name: "Accommodation Booking Agent",
-        description: "Specialist in finding and booking travel accommodations", 
-        capabilities: ["hotel booking", "price comparison", "location analysis"]
-      }
-    },
-    {
-      id: "plan-transportation",
-      title: "Plan Transportation", 
-      description: "Organize flights and local transportation within Vietnam",
-      status: "pending",
-      assignedAgent: {
-        id: "transport-agent",
-        name: "Transportation Coordinator",
-        description: "Expert in flight booking and local transportation planning",
-        capabilities: ["flight booking", "local transport", "route optimization"]
-      }
-    },
-    {
-      id: "create-itinerary",
-      title: "Create Daily Itinerary",
-      description: "Plan detailed daily activities and schedule for the 3-day trip",
-      status: "pending", 
-      assignedAgent: {
-        id: "itinerary-agent",
-        name: "Itinerary Planning Specialist",
-        description: "Expert in creating detailed travel itineraries and schedules",
-        capabilities: ["schedule planning", "activity coordination", "time management"]
-      }
-    },
-    {
-      id: "travel-documents",
-      title: "Prepare Travel Documents",
-      description: "Ensure all necessary documents and visas are ready",
-      status: "pending",
-      assignedAgent: {
-        id: "docs-agent", 
-        name: "Travel Documentation Agent",
-        description: "Specialist in travel document preparation and visa requirements",
-        capabilities: ["visa processing", "document verification", "travel requirements"]
-      }
-    }
-  ]
-})
+requestA2AAgent({
+  userRequirements: "Plan a comprehensive 3-day Vietnam trip including destinations, accommodation, transportation, and budget breakdown",
+  contextId: "chat-context-id", 
+  chatId: "current-chat-id",
+  urgency: "medium",
+  title: "Vietnam 3-Day Trip Planning"
+});
 
-**CRITICAL:** DO NOT create empty documents first. DO NOT give text responses. USE createTask IMMEDIATELY.
+The requestA2AAgent tool will handle the entire workflow automatically and return a canvas with organized tasks.
 
 When asked to write code, always use artifacts. When writing code, specify the language in the backticks, e.g. \`\`\`python\`code here\`\`\`. The default language is Python. Other languages are not yet supported, so let the user know if they request a different language.
 
@@ -110,7 +56,7 @@ This is a guide for using artifacts tools: \`createDocument\` and \`updateDocume
 - For content users will likely save/reuse (emails, code, essays, etc.)
 - When explicitly requested to create a document
 - For when content contains a single code snippet
-- NOT for task decomposition - use the \`planTasks\` workflow instead
+- NOT for task decomposition - use the \`requestA2AAgent\` tool instead
 
 **When to use \`${ARTIFACT_TYPES.CANVAS}\` kind:**
 - When users request task decomposition
@@ -122,7 +68,7 @@ This is a guide for using artifacts tools: \`createDocument\` and \`updateDocume
 - For agent coordination and workflow visualization
 - When users ask for "task organization" or "project structure"
 
-**IMPORTANT: If the user asks for task decomposition, project planning, or breaking down tasks, use the \`planTasks\` workflow and then \`createTask\` if confirmed. The canvas will be saved as a document that users can access by clicking the canvas document widget.**
+**IMPORTANT: If the user asks for task decomposition, project planning, or breaking down tasks, use the \`requestA2AAgent\` tool. This tool will automatically create the canvas and tasks. The canvas will be saved as a document that users can access by clicking the canvas document widget.**
 
 **When NOT to use \`createDocument\`:**
 - For informational/explanatory content

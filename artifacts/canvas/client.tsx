@@ -1,6 +1,6 @@
 import { Artifact } from '@/components/create-artifact';
 import { CanvasFlow } from '../../components/canvas-flow';
-import { DocumentSkeleton } from '@/components/document-skeleton';
+import React from 'react';
 
 import {
   ClockRewind,
@@ -10,298 +10,310 @@ import {
   RedoIcon,
   UndoIcon,
 } from '@/components/icons';
-import type { Suggestion } from '@/lib/db/schema';
 import { toast } from 'sonner';
 
-interface CanvasArtifactMetadata {
-  taskId?: string; // The task ID from Python agent (for execution)
-  suggestions: Array<Suggestion>;
+// Canvas data structure received from tools
+interface CanvasData {
   tasks: Array<{
     id: string;
     title: string;
     description: string;
     status: 'pending' | 'in-progress' | 'completed' | 'recruiting';
+    assignedAgent?: {
+      id: string;
+      name: string;
+      description: string;
+      capabilities: string[];
+      pricingUsdt?: number;
+      walletAddress?: string;
+      rating?: number;
+      completedTasks?: number;
+    };
   }>;
-  agents: Array<{
+  agents?: Array<{
     id: string;
     name: string;
     description: string;
     capabilities: string[];
-    taskId?: string;
+    taskId: string;
     pricingUsdt?: number;
     walletAddress?: string;
+    rating?: number;
+    completedTasks?: number;
   }>;
-  responses: Array<{
-    id: string;
-    agentId: string;
-    content: string;
-    timestamp: Date;
-  }>;
-  summary: {
-    id: string;
-    content: string;
-    timestamp: Date;
-  } | null;
-  isInitialDataLoaded?: boolean; // New flag to prevent re-processing loaded data
+  documentId?: string;
+  title?: string;
 }
 
-export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
+// Simple Canvas Content Component
+interface CanvasContentProps {
+  content: string;
+  mode: string;
+  status: string;
+  isCurrentVersion: boolean;
+  currentVersionIndex: number;
+  onSaveContent: (updatedContent: string, debounce: boolean) => void;
+  getDocumentContentById: (id: number) => string;
+  isLoading: boolean;
+}
+
+const CanvasContent: React.FC<CanvasContentProps> = ({
+  content,
+  mode,
+  status,
+  isCurrentVersion,
+  currentVersionIndex,
+  onSaveContent,
+  getDocumentContentById,
+  isLoading,
+}) => {
+  // Debug: Log what we actually receive
+  console.log('[Canvas Debug] 🔍 Content received:', {
+    content,
+    contentType: typeof content,
+    contentLength: content?.length || 0,
+    status,
+    isLoading,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Parse canvas data from content
+  let canvasData: CanvasData;
+  try {
+    canvasData = JSON.parse(content || '{}');
+    console.log('[Canvas Debug] ✅ Successfully parsed canvas data:', {
+      taskCount: canvasData.tasks?.length || 0,
+      hasDocumentId: !!canvasData.documentId,
+      hasTitle: !!canvasData.title,
+      tasks: canvasData.tasks?.map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+      })),
+    });
+  } catch {
+    // If content is not JSON, show initializing state
+    if (status === 'streaming' || isLoading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="text-lg font-semibold text-gray-700">
+              Canvas Loading...
+            </div>
+            <div className="text-sm text-gray-500 mt-2">
+              Generating task visualization
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <div className="text-lg font-semibold text-gray-700">
+            No Canvas Data
+          </div>
+          <div className="text-sm text-gray-500 mt-2">
+            Unable to load canvas content
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle diff mode
+  if (mode === 'diff') {
+    const oldContent = getDocumentContentById(currentVersionIndex - 1);
+    const newContent = getDocumentContentById(currentVersionIndex);
+
+    return (
+      <div className="flex flex-col py-8 md:p-20 px-4">
+        <div className="text-sm text-muted-foreground mb-4">
+          Canvas diff view not available
+        </div>
+        <div className="bg-muted p-4 rounded-lg">
+          <div className="font-semibold mb-2">Previous:</div>
+          <div className="text-sm">{oldContent}</div>
+          <div className="font-semibold mb-2 mt-4">Current:</div>
+          <div className="text-sm">{newContent}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract data for CanvasFlow
+  const tasks = canvasData.tasks || [];
+  const agents = canvasData.agents || [];
+  const documentTitle =
+    canvasData.title || canvasData.documentId || 'Task Canvas';
+
+  console.log('[Canvas Debug] 🎨 Rendering Canvas with data:', {
+    taskCount: tasks.length,
+    agentCount: agents.length,
+    documentTitle: documentTitle,
+    tasksPreview: tasks
+      .slice(0, 2)
+      .map((t) => ({ id: t.id, title: t.title, status: t.status })),
+  });
+
+  // Create mock responses for completed tasks
+  const mockResponses = tasks
+    .filter((task) => task.status === 'completed')
+    .map((task) => ({
+      id: `response-${task.id}`,
+      agentId: task.assignedAgent?.id || `agent-${task.id}`,
+      content: 'Task completed successfully',
+      timestamp: new Date(),
+    }));
+
+  // Handler for executing all agents
+  const handleExecuteAllAgents = async () => {
+    if (tasks.length === 0) {
+      toast.warning('No tasks available to execute');
+      return;
+    }
+
+    toast.info(`Executing ${tasks.length} tasks...`);
+
+    try {
+      const executionPromises = tasks.map(async (task) => {
+        const response = await fetch('/api/agent/execution', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            taskId: task.id,
+            executionMode: 'parallel',
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(`Task ${task.id}: ${error || response.statusText}`);
+        }
+
+        return response;
+      });
+
+      await Promise.all(executionPromises);
+      toast.success('All tasks execution initiated successfully');
+    } catch (error) {
+      console.error('Error executing tasks:', error);
+      toast.error('Failed to execute some tasks');
+    }
+  };
+
+  // Handler for summary generation
+  const handleSummarize = () => {
+    if (mockResponses.length === 0) {
+      toast.warning('No task responses available to summarize');
+      return;
+    }
+
+    toast.info('Requesting summary from orchestrator...');
+    // TODO: Implement summary generation via A2A agent
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="relative size-full">
+        <CanvasFlow
+          tasks={tasks}
+          agents={agents}
+          responses={mockResponses}
+          summary={null}
+          onExecuteAllAgents={handleExecuteAllAgents}
+          onSummarize={handleSummarize}
+          isGenerating={status === 'streaming' && tasks.length === 0}
+          allAgentsExecuted={mockResponses.length === tasks.length}
+          documentTitle={documentTitle}
+        />
+      </div>
+    </div>
+  );
+};
+
+// Simplified Canvas Artifact - no metadata needed
+export const canvasArtifact = new Artifact<'canvas'>({
   kind: 'canvas',
   description:
     'Interactive canvas for task decomposition and agent coordination.',
-  initialize: async ({ documentId, setMetadata }) => {
-    // Skip suggestions for canvas - they're not used in the A2A task workflow
-    // and were causing database errors during initialization
-    setMetadata({
-      taskId: undefined, // Will be set when task is created
-      suggestions: [], // Empty array - suggestions not needed for canvas
-      tasks: [],
-      agents: [],
-      responses: [],
-      summary: null,
-      isInitialDataLoaded: false, // Initialize the flag
-    });
+
+  initialize: async ({ documentId }) => {
+    console.log(
+      '[Canvas Artifact] 🚀 Initialize called with documentId:',
+      documentId,
+    );
+
+    // This is called when Canvas is opened from chat history
+    // The AI SDK will call onUpdateDocument after this
   },
-  onStreamPart: ({ streamPart, setMetadata, setArtifact }) => {
-    // Handle suggestions if they come through (optional, with error handling)
-    if (streamPart.type === 'data-suggestion') {
+
+  onStreamPart: ({ streamPart, setArtifact }) => {
+    console.log('[Canvas Artifact] 🔄 Stream received:', {
+      type: streamPart.type,
+      hasData: 'data' in streamPart,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Handle Canvas task data from server handler (creation and reopening)
+    if (streamPart.type === 'data-textDelta') {
+      console.log('[Canvas Artifact] 📥 Received Canvas data:', {
+        dataLength: streamPart.data?.length || 0,
+        dataPreview: streamPart.data?.substring(0, 100) || 'none',
+      });
+
       try {
-        setMetadata((metadata) => {
-          return {
-            ...metadata,
-            suggestions: [...(metadata.suggestions || []), streamPart.data],
-          };
+        const canvasData = JSON.parse(streamPart.data);
+
+        console.log('[Canvas Artifact] 📊 Parsed Canvas data:', {
+          taskCount: canvasData.tasks?.length || 0,
+          hasDocumentId: !!canvasData.documentId,
+          hasTitle: !!canvasData.title,
+          status: canvasData.status,
         });
+
+        if (canvasData.tasks && canvasData.tasks.length > 0) {
+          console.log(
+            '[Canvas Artifact] ✅ Setting artifact content with tasks',
+          );
+
+          setArtifact((draftArtifact) => ({
+            ...draftArtifact,
+            content: streamPart.data, // Set the complete JSON task data as content
+            isVisible: true,
+            status: 'streaming',
+          }));
+
+          toast.success(`Canvas loaded with ${canvasData.tasks.length} tasks`);
+        } else {
+          console.log(
+            '[Canvas Artifact] ⚠️ No tasks in Canvas data, setting empty content',
+          );
+
+          setArtifact((draftArtifact) => ({
+            ...draftArtifact,
+            content: streamPart.data, // Still set content even if empty
+            isVisible: true,
+            status: 'idle',
+          }));
+        }
       } catch (error) {
-        console.warn('Error handling suggestion stream part:', error);
-        // Continue without suggestions - they're not essential for canvas
+        console.error('[Canvas Artifact] ❌ Error parsing Canvas data:', error);
+
+        // Set raw data even if JSON parsing fails
+        setArtifact((draftArtifact) => ({
+          ...draftArtifact,
+          content: streamPart.data,
+          isVisible: true,
+          status: 'idle',
+        }));
       }
     }
-
-    if (streamPart.type === 'data-textDelta') {
-      setArtifact((draftArtifact) => {
-        // Parse streamed data from Python agent with enhanced error handling
-        try {
-          if (!streamPart.data || typeof streamPart.data !== 'string') {
-            console.warn('Invalid stream data received:', streamPart.data);
-            return draftArtifact;
-          }
-
-          const parsedData = JSON.parse(streamPart.data);
-          console.log('[Canvas] Processing streamed data:', parsedData);
-
-          // Handle new job with pre-assigned agent (jobs within a task)
-          if (parsedData.newJob) {
-            console.log('Received job with agent:', parsedData.newJob.title);
-            if (parsedData.taskId) {
-              console.log('Setting taskId in metadata:', parsedData.taskId);
-            } else {
-              console.warn(
-                'No taskId in parsedData for job:',
-                parsedData.newJob.title,
-              );
-            }
-
-            // Use functional update to prevent race conditions
-            setMetadata((prevMetadata) => {
-              const currentTasks = prevMetadata?.tasks || [];
-              const currentAgents = prevMetadata?.agents || [];
-
-              // Check if job already exists to prevent duplicates
-              if (
-                currentTasks.some((task) => task.id === parsedData.newJob.id)
-              ) {
-                console.log(
-                  'Job already exists, skipping:',
-                  parsedData.newJob.title,
-                );
-                return prevMetadata;
-              }
-
-              console.log(
-                `Adding job ${currentTasks.length + 1}: ${parsedData.newJob.title}`,
-              );
-
-              return {
-                ...prevMetadata,
-                taskId: parsedData.taskId || prevMetadata?.taskId, // Set or preserve taskId
-                tasks: [...currentTasks, parsedData.newJob], // UI uses 'tasks' for jobs
-                // Add agent if job has one assigned
-                agents: parsedData.newJob.assignedAgent
-                  ? [
-                      ...currentAgents,
-                      {
-                        ...parsedData.newJob.assignedAgent,
-                        taskId: parsedData.newJob.id,
-                      },
-                    ]
-                  : currentAgents,
-              };
-            });
-          }
-          // Handle job response from agent execution (both legacy and standardized formats)
-          else if (
-            parsedData.jobResponse ||
-            (parsedData.type === 'job-update' && parsedData.data)
-          ) {
-            const jobData = parsedData.jobResponse || parsedData.data;
-            console.log('Received job response:', jobData.agentId);
-            setMetadata((metadata) => ({
-              ...metadata,
-              taskId: metadata?.taskId, // Preserve taskId
-              responses: [
-                ...(metadata?.responses || []),
-                {
-                  ...jobData,
-                  timestamp: new Date(jobData.timestamp),
-                },
-              ],
-              // Update job status if needed
-              tasks: (metadata?.tasks || []).map((job) => {
-                return job.id === jobData.jobId
-                  ? { ...job, status: jobData.status || ('completed' as const) }
-                  : job;
-              }),
-            }));
-          }
-          // Handle summary (both legacy and standardized formats)
-          else if (
-            parsedData.summary ||
-            (parsedData.type === 'summary-update' && parsedData.data)
-          ) {
-            const summaryData = parsedData.summary || parsedData.data;
-            console.log('Received summary update');
-            setMetadata((metadata) => ({
-              ...metadata,
-              taskId: metadata?.taskId, // Preserve taskId
-              summary: {
-                ...summaryData,
-                timestamp: new Date(summaryData.timestamp),
-              },
-            }));
-          }
-          // Handle job completion confirmation from createTask
-          else if (parsedData.type === 'jobs-completed') {
-            console.log(
-              `All ${parsedData.totalJobs} jobs completed for task ${parsedData.taskId}`,
-            );
-
-            // Validate that all jobs were received
-            setMetadata((prevMetadata) => {
-              const currentTasks = prevMetadata?.tasks || [];
-              const expectedCount = parsedData.totalJobs;
-              const actualCount = currentTasks.length;
-
-              if (actualCount !== expectedCount) {
-                console.error(
-                  `Job count mismatch! Expected: ${expectedCount}, Actual: ${actualCount}`,
-                );
-                console.error(
-                  'Current tasks:',
-                  currentTasks.map((t) => t.title),
-                );
-
-                // Could trigger a retry mechanism here if needed
-                toast.error(
-                  `Job streaming incomplete: ${actualCount}/${expectedCount} jobs received`,
-                );
-              } else {
-                console.log(
-                  `✅ All ${actualCount} jobs successfully received and processed`,
-                );
-                toast.success(`Canvas ready: ${actualCount} jobs loaded`);
-              }
-
-              return prevMetadata;
-            });
-          }
-          // Handle canvas ready status
-          else if (parsedData.status === 'canvas-ready') {
-            console.log('[Canvas] Canvas ready:', parsedData.message);
-            toast.success(parsedData.message || 'Canvas created successfully');
-
-            // Set basic taskId if available
-            if (parsedData.canvasId) {
-              setMetadata((metadata) => ({
-                ...metadata,
-                taskId: parsedData.canvasId,
-              }));
-            }
-          }
-          // Handle complete data structure
-          else if (parsedData.tasks) {
-            console.log(
-              'Received complete data with',
-              parsedData.tasks.length,
-              'tasks',
-            );
-            setMetadata((metadata) => ({
-              ...metadata,
-              taskId: metadata?.taskId, // Preserve taskId
-              tasks: parsedData.tasks,
-              agents: parsedData.agents || [],
-              responses: parsedData.responses || [],
-              summary: parsedData.summary || null,
-            }));
-          }
-          // Handle loading saved data from server
-          else if (parsedData.type === 'load-saved-data') {
-            setMetadata((currentMetadata) => {
-              if (currentMetadata?.isInitialDataLoaded) {
-                console.log('[Canvas] Initial data already loaded, skipping.');
-                return currentMetadata;
-              }
-
-              console.log('[Canvas] Loading saved data from server:', {
-                taskId: parsedData.taskId,
-                taskCount: parsedData.tasks?.length || 0,
-                agentCount: parsedData.agents?.length || 0,
-                responseCount: parsedData.responses?.length || 0,
-                hasSummary: !!parsedData.summary,
-              });
-
-              // Convert timestamps back to Date objects
-              const responses = (parsedData.responses || []).map(
-                (response: any) => ({
-                  ...response,
-                  timestamp: new Date(response.timestamp),
-                }),
-              );
-
-              const summary = parsedData.summary
-                ? {
-                    ...parsedData.summary,
-                    timestamp: new Date(parsedData.summary.timestamp),
-                  }
-                : null;
-
-              return {
-                ...currentMetadata,
-                taskId: parsedData.taskId || currentMetadata?.taskId,
-                tasks: parsedData.tasks || [],
-                agents: parsedData.agents || [],
-                responses,
-                summary,
-                isInitialDataLoaded: true, // Mark as loaded
-              };
-            });
-          }
-        } catch (error) {
-          // Not JSON, likely streaming text - log for debugging but don't break
-          console.log(
-            '[Canvas] Non-JSON data received (normal for text streams):',
-            streamPart.data?.substring(0, 100),
-          );
-        }
-
-        return {
-          ...draftArtifact,
-          // Don't set content for canvas - it uses metadata instead
-          status: 'streaming',
-        };
-      });
-    }
   },
+
   content: ({
     mode,
     status,
@@ -311,235 +323,19 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
     onSaveContent,
     getDocumentContentById,
     isLoading,
-    metadata,
-    setMetadata,
-  }) => {
-    if (isLoading) {
-      return <DocumentSkeleton artifactKind="canvas" />;
-    }
+  }) => (
+    <CanvasContent
+      mode={mode}
+      status={status}
+      content={content}
+      isCurrentVersion={isCurrentVersion}
+      currentVersionIndex={currentVersionIndex}
+      onSaveContent={onSaveContent}
+      getDocumentContentById={getDocumentContentById}
+      isLoading={isLoading}
+    />
+  ),
 
-    if (mode === 'diff') {
-      const oldContent = getDocumentContentById(currentVersionIndex - 1);
-      const newContent = getDocumentContentById(currentVersionIndex);
-
-      return (
-        <div className="flex flex-col py-8 md:p-20 px-4">
-          <div className="text-sm text-muted-foreground mb-4">
-            Canvas diff view not available
-          </div>
-          <div className="bg-muted p-4 rounded-lg">
-            <div className="font-semibold mb-2">Previous:</div>
-            <div className="text-sm">{oldContent}</div>
-            <div className="font-semibold mb-2 mt-4">Current:</div>
-            <div className="text-sm">{newContent}</div>
-          </div>
-        </div>
-      );
-    }
-
-    // Handler for executing all agents via Python orchestrator
-    const handleExecuteAllAgents = async () => {
-      const agents = metadata?.agents || [];
-
-      console.log('Execute clicked - Current metadata:', metadata);
-      console.log('TaskId in metadata:', metadata?.taskId);
-
-      if (!agents.length) {
-        toast.warning('No agents available to execute');
-        return;
-      }
-
-      // Get taskId from metadata (set when task was created)
-      const taskId = metadata?.taskId;
-
-      if (!taskId) {
-        console.error('No taskId found in metadata:', metadata);
-        toast.error('No task ID found. Please create a task first.');
-        return;
-      }
-
-      toast.info(`Executing ${agents.length} agents...`);
-
-      // Update all jobs to in-progress when execution starts
-      setMetadata((metadata) => ({
-        ...metadata,
-        tasks: (metadata?.tasks || []).map((task) => ({
-          ...task,
-          status: 'in-progress' as const,
-        })),
-      }));
-
-      try {
-        // Call API endpoint with taskId
-        const response = await fetch('/api/agent/execution', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            taskId,
-            executionMode: 'parallel',
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.text();
-          throw new Error(error || response.statusText);
-        }
-
-        // The API returns an SSE stream
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error('No response stream available');
-        }
-
-        // Process the SSE stream
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                const eventType =
-                  typeof data.type === 'string'
-                    ? data.type.replace(/^data-/, '')
-                    : '';
-
-                // Handle different event types
-                if (eventType === 'execution-started') {
-                  console.log('Execution started:', data.message);
-                } else if (
-                  eventType === 'job-update' ||
-                  data.type === 'job-update'
-                ) {
-                  // Handle both old and new job-update formats
-                  const jobData = data.data || data;
-                  console.log('Job update:', jobData);
-                  setMetadata((metadata) => ({
-                    ...metadata,
-                    taskId: metadata?.taskId, // Preserve taskId
-                    responses: [
-                      ...(metadata?.responses || []),
-                      {
-                        ...jobData,
-                        timestamp: new Date(jobData.timestamp),
-                      },
-                    ],
-                    tasks: (metadata?.tasks || []).map((job) =>
-                      job.id === jobData.jobId
-                        ? {
-                            ...job,
-                            status: jobData.status || ('completed' as const),
-                          }
-                        : job,
-                    ),
-                  }));
-                } else if (
-                  eventType === 'summary-update' ||
-                  data.type === 'summary-update'
-                ) {
-                  // Handle both old and new summary-update formats
-                  const summaryData = data.data || data;
-                  console.log('Summary update:', summaryData);
-                  setMetadata((metadata) => ({
-                    ...metadata,
-                    taskId: metadata?.taskId, // Preserve taskId
-                    summary: {
-                      ...summaryData,
-                      timestamp: new Date(summaryData.timestamp),
-                    },
-                  }));
-                } else if (eventType === 'execution-completed') {
-                  toast.success('Agent execution completed successfully');
-                } else if (eventType === 'execution-error') {
-                  throw new Error(data.error);
-                }
-              } catch (parseError) {
-                console.error('Error parsing SSE data:', parseError);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error executing agents:', error);
-        toast.error('Failed to execute agents');
-
-        // Revert job statuses on error
-        setMetadata((metadata) => ({
-          ...metadata,
-          tasks: (metadata?.tasks || []).map((task) => ({
-            ...task,
-            status: 'pending' as const,
-          })),
-        }));
-      }
-    };
-
-    // Handler for summary generation
-    const handleSummarize = () => {
-      const responses = metadata?.responses || [];
-      if (responses.length === 0) {
-        toast.warning('No agent responses available to summarize');
-        return;
-      }
-
-      if (metadata?.summary) {
-        toast.info('Summary already exists');
-        return;
-      }
-
-      toast.info('Requesting summary from orchestrator...');
-      // Python agent will generate and stream the summary
-    };
-
-    // Debug logging for canvas state
-    console.log('[Canvas Render] Current state:', {
-      status,
-      hasMetadata: !!metadata,
-      taskCount: metadata?.tasks?.length || 0,
-      agentCount: metadata?.agents?.length || 0,
-      responseCount: metadata?.responses?.length || 0,
-      isGenerating:
-        status === 'streaming' &&
-        (!metadata?.tasks || metadata.tasks.length === 0),
-    });
-
-    return (
-      <div className="flex flex-col h-full">
-        <div className="relative size-full">
-          {/* Show debug info in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="absolute top-0 right-0 z-50 bg-black/80 text-white text-xs p-2 rounded-bl">
-              Tasks: {metadata?.tasks?.length || 0} | Agents:{' '}
-              {metadata?.agents?.length || 0} | Status: {status}
-            </div>
-          )}
-          <CanvasFlow
-            tasks={metadata?.tasks || []}
-            agents={metadata?.agents || []}
-            responses={metadata?.responses || []}
-            summary={metadata?.summary || null}
-            onExecuteAllAgents={handleExecuteAllAgents}
-            onSummarize={handleSummarize}
-            isGenerating={
-              status === 'streaming' &&
-              (!metadata?.tasks || metadata.tasks.length === 0)
-            }
-            allAgentsExecuted={(metadata?.agents || []).every((agent) =>
-              (metadata?.responses || []).some((r) => r.agentId === agent.id),
-            )}
-          />
-        </div>
-      </div>
-    );
-  },
   actions: [
     {
       icon: <ClockRewind size={18} />,
@@ -547,12 +343,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       onClick: ({ handleVersionChange }) => {
         handleVersionChange('toggle');
       },
-      isDisabled: ({ currentVersionIndex }) => {
-        if (currentVersionIndex === 0) {
-          return true;
-        }
-        return false;
-      },
+      isDisabled: ({ currentVersionIndex }) => currentVersionIndex === 0,
     },
     {
       icon: <UndoIcon size={18} />,
@@ -560,12 +351,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       onClick: ({ handleVersionChange }) => {
         handleVersionChange('prev');
       },
-      isDisabled: ({ currentVersionIndex }) => {
-        if (currentVersionIndex === 0) {
-          return true;
-        }
-        return false;
-      },
+      isDisabled: ({ currentVersionIndex }) => currentVersionIndex === 0,
     },
     {
       icon: <RedoIcon size={18} />,
@@ -573,12 +359,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       onClick: ({ handleVersionChange }) => {
         handleVersionChange('next');
       },
-      isDisabled: ({ isCurrentVersion }) => {
-        if (isCurrentVersion) {
-          return true;
-        }
-        return false;
-      },
+      isDisabled: ({ isCurrentVersion }) => isCurrentVersion,
     },
     {
       icon: <CopyIcon size={18} />,
@@ -589,6 +370,7 @@ export const canvasArtifact = new Artifact<'canvas', CanvasArtifactMetadata>({
       },
     },
   ],
+
   toolbar: [
     {
       icon: <PenIcon />,

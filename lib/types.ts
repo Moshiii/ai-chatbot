@@ -1,12 +1,4 @@
 import { z } from 'zod';
-import type { getWeather } from './ai/tools/get-weather';
-import type { planTasks } from './ai/tools/plan-tasks';
-import type { createDocument } from './ai/tools/create-document';
-import type { createTask } from './ai/tools/create-task';
-import type { updateTask } from './ai/tools/update-task';
-import type { updateDocument } from './ai/tools/update-document';
-import type { requestSuggestions } from './ai/tools/request-suggestions';
-import type { InferUITool, UIMessage } from 'ai';
 
 import type { ArtifactKind } from '@/components/artifact';
 import type { Suggestion } from './db/schema';
@@ -19,25 +11,53 @@ export const messageMetadataSchema = z.object({
 
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 
-type weatherTool = InferUITool<typeof getWeather>;
-type planTasksTool = InferUITool<ReturnType<typeof planTasks>>;
-type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
-type createTaskTool = InferUITool<ReturnType<typeof createTask>>;
-type updateTaskTool = InferUITool<ReturnType<typeof updateTask>>;
-type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
-type requestSuggestionsTool = InferUITool<
-  ReturnType<typeof requestSuggestions>
->;
+// Task status enum for validation and type safety
+export const taskStatusEnum = [
+  'submitted',
+  'working',
+  'input-required',
+  'completed',
+  'canceled',
+  'failed',
+  'rejected',
+  'auth-required',
+  'unknown',
+] as const;
 
-export type ChatTools = {
-  getWeather: weatherTool;
-  planTasks: planTasksTool;
-  createDocument: createDocumentTool;
-  createTask: createTaskTool;
-  updateTask: updateTaskTool;
-  updateDocument: updateDocumentTool;
-  requestSuggestions: requestSuggestionsTool;
+export const taskStatusSchema = z.enum(taskStatusEnum);
+
+export type TaskStatus = z.infer<typeof taskStatusSchema>;
+
+// Helper function to safely parse and transform task status
+export const parseTaskStatus = (status: string): TaskStatus => {
+  const result = taskStatusSchema.safeParse(status);
+  return result.success ? result.data : 'unknown';
 };
+
+// Transform database status to UI status
+export const transformTaskStatusToUI = (
+  status: string,
+): 'pending' | 'in-progress' | 'completed' | 'recruiting' => {
+  const parsedStatus = parseTaskStatus(status);
+
+  switch (parsedStatus) {
+    case 'completed':
+      return 'completed';
+    case 'working':
+      return 'in-progress';
+    case 'input-required':
+    case 'auth-required':
+      return 'recruiting';
+    case 'submitted':
+    case 'unknown':
+    default:
+      return 'pending';
+  }
+};
+
+// Use AI SDK v5 tool types - tools are defined as records with tool names
+// Use any to be compatible with different tool implementations
+export type ChatTools = Record<string, any>;
 
 export type CustomUIDataTypes = {
   textDelta: string;
@@ -51,13 +71,14 @@ export type CustomUIDataTypes = {
   kind: ArtifactKind;
   clear: null;
   finish: null;
+  canvasReference: {
+    artifactType: 'document';
+    documentId: string;
+  };
 };
 
-export type ChatMessage = UIMessage<
-  MessageMetadata,
-  CustomUIDataTypes,
-  ChatTools
->;
+// Use UIMessage directly from AI SDK v5 - no custom wrapper needed
+// The metadata and data types are handled through the parts structure
 
 export interface Attachment {
   name: string;

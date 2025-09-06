@@ -11,83 +11,84 @@ export const canvasDocumentHandler = createDocumentHandler({
     id,
     title,
     dataStream,
+    session,
   }: CreateDocumentCallbackProps) => {
-    console.log(`[Canvas Handler] Creating canvas: ${title} with ID: ${id}`);
+    console.log(`[Canvas Handler] 🚀 Creating Canvas: ${title} (${id})`);
 
-    // Initialize empty canvas structure
-    const initialData = {
-      taskId: id, // Use the document ID (UUID) as the initial task ID
-      tasks: [],
-      agents: [],
-      responses: [],
-      summary: null,
-    };
+    // Check if task data is available from the A2A tool
+    const canvasData = (global as any).canvasTaskData;
 
-    // Signal that canvas is ready and provide helpful message
-    dataStream.write({
-      type: 'data-textDelta',
-      data: JSON.stringify({
-        status: 'canvas-ready',
-        canvasId: id,
-        message: `Canvas "${title}" created. Ready for task data.`,
-      }),
-      transient: true,
-    });
+    if (canvasData?.tasks?.length > 0) {
+      console.log(`[Canvas Handler] ✅ Found task data, streaming to Canvas:`, {
+        taskCount: canvasData.tasks.length,
+        documentId: canvasData.documentId,
+      });
 
-    console.log(
-      `[Canvas Handler] Canvas ${id} initialized with empty structure`,
-    );
-    return JSON.stringify(initialData, null, 2);
+      const canvasContent = JSON.stringify(canvasData);
+
+      // Stream the Canvas data with task information
+      dataStream.write({
+        type: 'data-textDelta',
+        data: canvasContent,
+        transient: false, // Content should persist
+      });
+
+      // Clear the global data after use
+      (global as any).canvasTaskData = null;
+
+      return canvasContent;
+    } else {
+      console.log(
+        `[Canvas Handler] ⚠️ No task data found, creating empty Canvas`,
+      );
+
+      const placeholder = JSON.stringify({
+        tasks: [],
+        documentId: id,
+        title: title,
+        status: 'waiting-for-tasks',
+      });
+
+      dataStream.write({
+        type: 'data-textDelta',
+        data: placeholder,
+        transient: true,
+      });
+
+      return placeholder;
+    }
   },
+
   onUpdateDocument: async ({
     document,
-    description,
     dataStream,
   }: UpdateDocumentCallbackProps) => {
-    // Load existing canvas data when document is opened
-    if (document.content) {
-      try {
-        const existingData = JSON.parse(document.content);
+    console.log(
+      `[Canvas Handler] 📖 Loading existing Canvas: ${document.title} (${document.id})`,
+    );
 
-        // If we have saved data, stream it to the client to load into metadata
-        if (existingData.tasks && existingData.tasks.length > 0) {
-          console.log('[Canvas Handler] Loading saved canvas data:', {
-            taskId: existingData.taskId,
-            taskCount: existingData.tasks.length,
-            agentCount: existingData.agents?.length || 0,
-            responseCount: existingData.responses?.length || 0,
-            hasSummary: !!existingData.summary,
-          });
+    // Get saved Canvas content from database
+    const savedContent =
+      document.content ||
+      JSON.stringify({
+        tasks: [],
+        documentId: document.id,
+        title: document.title,
+      });
 
-          // Stream the saved data to the client
-          dataStream.write({
-            type: 'data-textDelta',
-            data: JSON.stringify({
-              type: 'load-saved-data',
-              ...existingData,
-            }),
-            transient: true,
-          });
-        }
-      } catch (error) {
-        console.error(
-          '[Canvas Handler] Failed to parse saved canvas data:',
-          error,
-        );
-      }
-    }
+    console.log(`[Canvas Handler] 📤 Streaming saved Canvas content:`, {
+      hasContent: !!document.content,
+      contentLength: savedContent.length,
+      contentPreview: savedContent.substring(0, 100),
+    });
 
-    // Return existing data - Python agent handles all updates
-    const existingData = document.content
-      ? JSON.parse(document.content)
-      : {
-          taskId: null,
-          tasks: [],
-          agents: [],
-          responses: [],
-          summary: null,
-        };
+    // Stream the saved Canvas content to artifact (critical for reopening)
+    dataStream.write({
+      type: 'data-textDelta',
+      data: savedContent,
+      transient: false, // Content should persist
+    });
 
-    return JSON.stringify(existingData, null, 2);
+    return savedContent;
   },
 });
