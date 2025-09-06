@@ -75,6 +75,46 @@ def log_error(message: str):
     caller_info = f"{Colors.LIGHT_GRAY}{caller.filename.split('/')[-1]}:{caller.lineno}{Colors.ENDC}"
     print(f"{Colors.LIGHT_RED}[ERROR]{Colors.ENDC} {caller_info} | {Colors.LIGHT_RED}{message}{Colors.ENDC}")
 
+def log_agent_start(agent_name: str, port: int = None):
+    """Log when an agent starts."""
+    import traceback
+    caller = traceback.extract_stack()[-2]
+    caller_info = f"{Colors.OKCYAN}{caller.filename.split('/')[-1]}:{caller.lineno}{Colors.ENDC}"
+    port_info = f" on port {port}" if port else ""
+    print(f"{Colors.OKGREEN}[AGENT START]{Colors.ENDC} {caller_info} | {Colors.BOLD}{agent_name}{Colors.ENDC}{port_info}")
+
+def log_agent_activity(agent_name: str, activity: str):
+    """Log agent activity/status updates."""
+    import traceback
+    caller = traceback.extract_stack()[-2]
+    caller_info = f"{Colors.OKCYAN}{caller.filename.split('/')[-1]}:{caller.lineno}{Colors.ENDC}"
+    print(f"{Colors.PURPLE}[AGENT]{Colors.ENDC} {caller_info} | {Colors.BOLD}{agent_name}{Colors.ENDC}: {Colors.OKBLUE}{activity}{Colors.ENDC}")
+
+def log_agent_request(agent_name: str, query: str, context_id: str = None):
+    """Log when an agent receives a request."""
+    import traceback
+    caller = traceback.extract_stack()[-2]
+    caller_info = f"{Colors.OKCYAN}{caller.filename.split('/')[-1]}:{caller.lineno}{Colors.ENDC}"
+    context_info = f" [ctx:{context_id}]" if context_id else ""
+    query_preview = query[:50] + "..." if len(query) > 50 else query
+    print(f"{Colors.LIGHT_BLUE}[AGENT REQ]{Colors.ENDC} {caller_info} | {Colors.BOLD}{agent_name}{Colors.ENDC}{context_info}: {Colors.LIGHT_GRAY}{query_preview}{Colors.ENDC}")
+
+def log_agent_response(agent_name: str, status: str, context_id: str = None):
+    """Log agent response status."""
+    import traceback
+    caller = traceback.extract_stack()[-2]
+    caller_info = f"{Colors.OKCYAN}{caller.filename.split('/')[-1]}:{caller.lineno}{Colors.ENDC}"
+    context_info = f" [ctx:{context_id}]" if context_id else ""
+    print(f"{Colors.LIGHT_GREEN}[AGENT RESP]{Colors.ENDC} {caller_info} | {Colors.BOLD}{agent_name}{Colors.ENDC}{context_info}: {Colors.WARNING}{status}{Colors.ENDC}")
+
+def log_system_event(event: str, details: str = ""):
+    """Log system-level events."""
+    import traceback
+    caller = traceback.extract_stack()[-2]
+    caller_info = f"{Colors.OKCYAN}{caller.filename.split('/')[-1]}:{caller.lineno}{Colors.ENDC}"
+    details_info = f" | {details}" if details else ""
+    print(f"{Colors.HEADER}[SYSTEM]{Colors.ENDC} {caller_info} | {Colors.BOLD}{event}{Colors.ENDC}{details_info}")
+
 
 # Define tools for the agents
 def google_search(query: str) -> str:
