@@ -17,6 +17,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow Stack Auth handler routes (OAuth callbacks, etc.) to pass through
+  if (pathname.startsWith('/handler')) {
+    return NextResponse.next();
+  }
+
   // Keep legacy auth routes for transition period
   if (pathname.startsWith('/api/auth')) {
     return NextResponse.next();
