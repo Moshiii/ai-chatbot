@@ -21,13 +21,12 @@ import { useRouter } from 'next/navigation';
 import { toast } from './toast';
 import { LoaderIcon } from './icons';
 import { guestRegex } from '@/lib/constants';
-import { useStackApp, useUser } from '@stackframe/stack';
+import { useStackApp } from '@stackframe/stack';
 
 export function SidebarUserNav({ user }: { user: AppUser }) {
   const router = useRouter();
   const { setTheme, resolvedTheme } = useTheme();
   const stackApp = useStackApp();
-  const stackUser = useUser();
 
   // We don't have session status now; show immediate UI
   const isGuest = guestRegex.test(user?.email ?? '');
@@ -105,9 +104,7 @@ export function SidebarUserNav({ user }: { user: AppUser }) {
                     if (isGuest) {
                       router.push('/login');
                     } else {
-                      if (stackUser) {
-                        await stackUser.signOut();
-                      }
+                      await stackApp.signOut();
                       router.push('/');
                     }
                   } catch (error) {
