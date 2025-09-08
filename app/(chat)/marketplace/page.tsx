@@ -1,14 +1,16 @@
-import { auth } from '@/app/(auth)/auth';
+import { getCurrentAppUser } from '@/lib/stack-auth';
 import { redirect } from 'next/navigation';
 import AgentMarketplace from '@/components/agent-marketplace';
 import { PageHeader } from '@/components/page-header';
 
 export default async function Page() {
-  const session = await auth();
+  const user = await getCurrentAppUser();
 
-  if (!session) {
-    redirect('/api/auth/guest');
+  if (!user) {
+    redirect('/login');
   }
+
+  const session = { user: { id: user.id, type: 'regular' as const } };
 
   return (
     <>
@@ -16,4 +18,4 @@ export default async function Page() {
       <AgentMarketplace />
     </>
   );
-} 
+}
