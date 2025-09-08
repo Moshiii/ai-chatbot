@@ -6,7 +6,7 @@ import { canvasDocumentHandler } from '@/artifacts/canvas/server';
 import type { ArtifactKind } from '@/components/artifact';
 import type { Document } from '../db/schema';
 import { saveDocument } from '../db/queries';
-import type { Session } from 'next-auth';
+import type { AppSession } from '@/lib/types';
 import type { UIMessageStreamWriter, UIMessage } from 'ai';
 // Constants for artifact types
 const ARTIFACT_TYPES = {
@@ -29,14 +29,14 @@ export interface CreateDocumentCallbackProps {
   id: string;
   title: string;
   dataStream: UIMessageStreamWriter<UIMessage>;
-  session: Session;
+  session: AppSession;
 }
 
 export interface UpdateDocumentCallbackProps {
   document: Document;
   description: string;
   dataStream: UIMessageStreamWriter<UIMessage>;
-  session: Session;
+  session: AppSession;
 }
 
 export interface DocumentHandler<T = ArtifactKind> {
@@ -67,6 +67,7 @@ export function createDocumentHandler<T extends ArtifactKind>(config: {
           content: draftContent,
           kind: config.kind,
           userId: args.session.user.id,
+          ownerId: args.session.user.id, // Use user ID as owner ID for now
         });
       }
 
@@ -90,6 +91,7 @@ export function createDocumentHandler<T extends ArtifactKind>(config: {
           content: draftContent,
           kind: config.kind,
           userId: args.session.user.id,
+          ownerId: args.session.user.id, // Use user ID as owner ID for now
         });
       }
 

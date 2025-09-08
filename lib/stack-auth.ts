@@ -15,7 +15,9 @@ export async function getCurrentStackUser(request?: Request) {
   }
 }
 
-export async function getCurrentAppUser(request?: Request): Promise<User | null> {
+export async function getCurrentAppUser(
+  request?: Request,
+): Promise<User | null> {
   try {
     const stackUser = await getCurrentStackUser(request);
     if (!stackUser || !stackUser.primaryEmail) {

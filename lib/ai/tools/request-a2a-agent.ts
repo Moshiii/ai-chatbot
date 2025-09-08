@@ -425,6 +425,7 @@ The tool will communicate with an external A2A-compliant agent that specializes 
           kind: 'canvas',
           content: canvasContent,
           userId: session.user.id,
+          ownerId: session.user.id, // Use user ID as owner ID for now
         });
 
         // Link tasks to canvas document for persistence (reopening later)
