@@ -85,3 +85,19 @@ export interface Attachment {
   url: string;
   contentType: string;
 }
+
+// Stack Auth Session type to replace NextAuth Session
+export type AppSession = {
+  user: {
+    id: string;
+    type: 'regular' | 'guest';
+  };
+};
+
+// Stack Auth User type
+export type AppUser = {
+  id: string;
+  email: string;
+  name?: string;
+  image?: string;
+};
