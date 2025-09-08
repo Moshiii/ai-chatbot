@@ -1,15 +1,21 @@
 'use client';
 
 import { toast } from '@/components/toast';
-import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { GitHubIcon } from '@/components/icons';
+import { useStackApp } from '@stackframe/stack';
+import { useRouter } from 'next/navigation';
 
 export default function Page() {
+  const stackApp = useStackApp();
+  const router = useRouter();
+
   const handleGitHubSignIn = async () => {
     try {
-      await signIn('github', { callbackUrl: '/' });
+      await stackApp.signInWithOAuth('github');
+      router.push('/');
     } catch (error) {
+      console.error('GitHub sign-in error:', error);
       toast({
         type: 'error',
         description: 'Failed to sign in with GitHub!',
@@ -26,7 +32,7 @@ export default function Page() {
             Sign in with your GitHub account
           </p>
         </div>
-        
+
         {/* GitHub Sign In Button */}
         <div className="px-4 sm:px-16">
           <Button
