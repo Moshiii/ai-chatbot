@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getTaskById } from '@/lib/db/queries';
 import type { Task } from '@/lib/db/schema';
-import { auth } from '@/app/(auth)/auth';
+import { requireCurrentAppUser } from '@/lib/stack-auth';
 import type { TaskResultData, TaskStatusResponse } from '@/lib/types/tasks';
 
 // Extended Task type with properly typed result field
@@ -14,11 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await auth();
-
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const user = await requireCurrentAppUser();
 
     const { id: taskId } = await params;
     if (!taskId) {

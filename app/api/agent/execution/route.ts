@@ -1,4 +1,4 @@
-import { auth } from '@/app/(auth)/auth';
+import { requireCurrentAppUser } from '@/lib/stack-auth';
 import { ChatSDKError } from '@/lib/errors';
 import { a2a } from '@/lib/ai/a2a-provider';
 import { createUIMessageStream, JsonToSseTransformStream } from 'ai';
@@ -21,9 +21,9 @@ export async function POST(request: Request) {
 
   try {
     // 1. Authentication
-    const session = await auth();
+    const user = await requireCurrentAppUser();
 
-    if (!session?.user) {
+    if (!user) {
       console.log('[Agent Execution API] Unauthorized - no session');
       return new ChatSDKError('unauthorized:auth').toResponse();
     }
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const body: AgentExecutionRequest = await request.json();
     const { taskId, executionMode = 'parallel' } = body;
     console.log(
-      `[Agent Execution API] Task: ${taskId}, Mode: ${executionMode}, User: ${session.user.id}`,
+      `[Agent Execution API] Task: ${taskId}, Mode: ${executionMode}, User: ${user.id}`,
     );
 
     // 3. Validate required fields
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
     // 4. Business Logic - Payment Processing (placeholder)
     // TODO: Implement actual payment processing
-    const paymentRequired = await checkPaymentRequired(taskId, session.user.id);
+    const paymentRequired = await checkPaymentRequired(taskId, user.id);
     if (paymentRequired) {
       console.log('[Agent Execution API] Payment required for task execution');
       // In production, this would:
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
     // 5. Rate Limiting (placeholder)
     // TODO: Implement rate limiting per user
-    const rateLimitExceeded = await checkRateLimit(session.user.id);
+    const rateLimitExceeded = await checkRateLimit(user.id);
     if (rateLimitExceeded) {
       console.log('[Agent Execution API] Rate limit exceeded');
       return new ChatSDKError(
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       type: 'execute_jobs',
       taskId, // Python agent will look up stored task data
       executionMode,
-      userId: session.user.id,
+      userId: user.id,
       timestamp: new Date().toISOString(),
     };
 

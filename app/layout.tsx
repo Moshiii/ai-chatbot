@@ -2,8 +2,7 @@ import { Toaster } from 'sonner';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
-import { SessionProviderWrapper } from '@/components/session-provider';
-import { auth } from './(auth)/auth';
+import { StackProvider } from '@/components/stack-provider';
 
 import './globals.css';
 
@@ -49,13 +48,11 @@ const THEME_COLOR_SCRIPT = `\
   updateThemeColor();
 })();`;
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth();
-
   return (
     <html
       lang="en"
@@ -81,9 +78,7 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <Toaster position="top-center" />
-          <SessionProviderWrapper session={session}>
-            {children}
-          </SessionProviderWrapper>
+          <StackProvider>{children}</StackProvider>
         </ThemeProvider>
       </body>
     </html>

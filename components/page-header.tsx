@@ -10,11 +10,10 @@ import { PlusIcon } from './icons';
 import { useSidebar } from './ui/sidebar';
 import { memo } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import type { Session } from 'next-auth';
-import { guestRegex } from '@/lib/constants';
+import type { AppSession } from '@/lib/types';
 
 interface HeaderProps {
-  session: Session;
+  session: AppSession;
   showNewChatButton?: boolean;
   showBalance?: boolean;
   showNavigation?: boolean;
@@ -32,7 +31,7 @@ function PurePageHeader({
   const { open } = useSidebar();
   const { width: windowWidth } = useWindowSize();
 
-  const isGuest = guestRegex.test(session?.user?.email ?? '');
+  const isGuest = session.user.type === 'guest';
 
   return (
     <header className="flex sticky top-0 bg-background py-1.5 items-center px-2 md:px-2 gap-2">
@@ -69,7 +68,7 @@ function PurePageHeader({
                 Balance:
               </span>
               <span className="text-sm font-bold text-green-800 dark:text-green-200">
-                {session.user.creditBalance || '0.00'} USDT
+                0.00 USDT
               </span>
             </div>
           )}
@@ -81,15 +80,6 @@ function PurePageHeader({
               </Button>
             </TooltipTrigger>
             <TooltipContent>Go to Messages</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="secondary" className="h-fit py-1.5 px-3" asChild>
-                <Link href="/marketplace">Marketplace</Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Explore Agent Marketplace</TooltipContent>
           </Tooltip>
 
           <Tooltip>

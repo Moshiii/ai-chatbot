@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { ModelSelector } from '@/components/model-selector';
 import { type VisibilityType, VisibilitySelector } from './visibility-selector';
-import type { Session } from 'next-auth';
+import type { AppSession } from '@/lib/types';
 import { PageHeader } from './page-header';
 
 function PureChatHeader({
@@ -17,7 +17,7 @@ function PureChatHeader({
   selectedModelId: string;
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
-  session: Session;
+  session: AppSession;
 }) {
   return (
     <PageHeader 

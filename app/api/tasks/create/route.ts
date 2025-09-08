@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/app/(auth)/auth';
+import { requireCurrentAppUser } from '@/lib/stack-auth';
 import { createTask, getTaskById } from '@/lib/db/queries';
 import { generateUUID } from '@/lib/utils';
 import { ChatSDKError } from '@/lib/errors';
@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // 1. Authentication
-    const session = await auth();
-    if (!session?.user) {
+    const user = await requireCurrentAppUser();
+    if (!user) {
       console.log('[Tasks Create API] Unauthorized - no session');
       return new ChatSDKError('unauthorized:auth').toResponse();
     }
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const { tasks, chatId } = body;
 
     console.log(
-      `[Tasks Create API] Creating ${tasks.length} tasks for chat ${chatId}, user: ${session.user.id}`,
+      `[Tasks Create API] Creating ${tasks.length} tasks for chat ${chatId}, user: ${user.id}`,
     );
 
     // 3. Validate required fields

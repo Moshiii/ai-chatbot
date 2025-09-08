@@ -1,7 +1,7 @@
 import { tool } from 'ai';
 import type { UIMessageStreamWriter, UIMessage } from 'ai';
 import { z } from 'zod';
-import type { Session } from 'next-auth';
+import type { AppSession } from '@/lib/types';
 import {
   artifactKinds,
   documentHandlersByArtifactKind,
@@ -9,7 +9,7 @@ import {
 import { generateDocumentIds } from '@/lib/id-management';
 
 interface CreateDocumentProps {
-  session: Session;
+  session: AppSession;
   dataStream: UIMessageStreamWriter<UIMessage>;
 }
 

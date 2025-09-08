@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/app/(auth)/auth';
+import { requireCurrentAppUser } from '@/lib/stack-auth';
 import {
   saveDocument,
   updateDocumentTaskIds,
@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // 1. Authentication
-    const session = await auth();
-    if (!session?.user) {
+    const user = await requireCurrentAppUser();
+    if (!user) {
       console.log('[Canvas Create API] Unauthorized - no session');
       return new ChatSDKError('unauthorized:auth').toResponse();
     }
@@ -94,7 +94,8 @@ export async function POST(request: NextRequest) {
         createdAt: new Date().toISOString(),
         totalTasks: taskIds.length,
       }),
-      userId: session.user.id,
+      userId: user.id,
+      ownerId: user.stackUserId || user.id,
     });
 
     // 7. Update document with task IDs

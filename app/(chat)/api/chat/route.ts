@@ -6,7 +6,8 @@ import {
   stepCountIs,
   streamText,
 } from 'ai';
-import { auth, type UserType } from '@/app/(auth)/auth';
+import { requireCurrentAppUser } from '@/lib/stack-auth';
+import type { UserType } from '@/lib/ai/entitlements';
 import { type RequestHints, systemPrompt } from '@/lib/ai/prompts';
 import {
   createStreamId,
@@ -92,16 +93,13 @@ export async function POST(request: Request) {
       selectedVisibilityType: VisibilityType;
     } = requestBody;
 
-    const session = await auth();
+    const user = await requireCurrentAppUser();
+    const session = { user: { id: user.id, type: 'regular' as UserType } };
 
-    if (!session?.user) {
-      return new ChatSDKError('unauthorized:chat').toResponse();
-    }
-
-    const userType: UserType = session.user.type || 'guest';
+    const userType: UserType = 'regular';
 
     const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
+      id: user.id,
       differenceInHours: 24,
     });
 
@@ -118,12 +116,13 @@ export async function POST(request: Request) {
 
       await saveChat({
         id,
-        userId: session.user.id,
+        userId: user.id,
         title,
         visibility: selectedVisibilityType,
+        ownerId: user.stackUserId || user.id,
       });
     } else {
-      if (chat.userId !== session.user.id) {
+      if (chat.userId !== user.id) {
         return new ChatSDKError('forbidden:chat').toResponse();
       }
     }
@@ -277,15 +276,11 @@ export async function DELETE(request: Request) {
     return new ChatSDKError('bad_request:api').toResponse();
   }
 
-  const session = await auth();
-
-  if (!session?.user) {
-    return new ChatSDKError('unauthorized:chat').toResponse();
-  }
+  const user = await requireCurrentAppUser();
 
   const chat = await getChatById({ id });
 
-  if (chat.userId !== session.user.id) {
+  if (chat.userId !== user.id) {
     return new ChatSDKError('forbidden:chat').toResponse();
   }
 

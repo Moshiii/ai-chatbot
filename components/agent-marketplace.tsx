@@ -7,8 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { useSession } from 'next-auth/react';
-import { guestRegex } from '@/lib/constants';
+// Removed next-auth imports - using Stack Auth now
 
 interface AgentItem {
   id: string;
@@ -305,9 +304,8 @@ const MOCK_AGENTS: AgentItem[] = [
 export default function AgentMarketplace() {
   const [query, setQuery] = useState('');
   const router = useRouter();
-  const { data: session } = useSession();
-
-  const isGuest = guestRegex.test(session?.user?.email ?? '');
+  // For now, assume authenticated users can access the marketplace
+  const isGuest = false;
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();

@@ -15,12 +15,11 @@ import { useArtifactSelector } from '@/hooks/use-artifact';
 import { unstable_serialize } from 'swr/infinite';
 import { getChatHistoryPaginationKey } from './sidebar-history';
 import { toast } from './toast';
-import type { Session } from 'next-auth';
+import type { AppSession, Attachment } from '@/lib/types';
 import { useSearchParams } from 'next/navigation';
 import { useChatVisibility } from '@/hooks/use-chat-visibility';
 import { useAutoResume } from '@/hooks/use-auto-resume';
 import { ChatSDKError } from '@/lib/errors';
-import type { Attachment } from '@/lib/types';
 import { useDataStream } from './data-stream-provider';
 import type { UIMessage } from 'ai';
 
@@ -38,7 +37,7 @@ export function Chat({
   initialChatModel: string;
   initialVisibilityType: VisibilityType;
   isReadonly: boolean;
-  session: Session;
+  session: AppSession;
   autoResume: boolean;
 }) {
   const { visibilityType } = useChatVisibility({

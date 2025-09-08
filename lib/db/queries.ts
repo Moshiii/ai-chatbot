@@ -112,11 +112,13 @@ export async function saveChat({
   userId,
   title,
   visibility,
+  ownerId,
 }: {
   id: string;
   userId: string;
   title: string;
   visibility: VisibilityType;
+  ownerId: string;
 }) {
   try {
     return await db.insert(chat).values({
@@ -125,6 +127,7 @@ export async function saveChat({
       userId,
       title,
       visibility,
+      ownerId,
     });
   } catch (error) {
     console.error('Database error in saveChat:', error);
@@ -281,11 +284,13 @@ export async function voteMessage({
   messageId,
   type,
   userId,
+  ownerId,
 }: {
-  chatId: string;
+  chatId?: string;
   messageId: string;
   type: 'up' | 'down';
   userId: string;
+  ownerId: string;
 }) {
   try {
     const [existingVote] = await db
@@ -296,14 +301,15 @@ export async function voteMessage({
     if (existingVote) {
       return await db
         .update(vote)
-        .set({ value: type })
+        .set({ value: type, ...(ownerId && { ownerId }) })
         .where(and(eq(vote.messageId, messageId), eq(vote.userId, userId)));
     }
     return await db.insert(vote).values({
-      chatId,
       messageId,
       value: type,
       userId,
+      ownerId,
+      ...(chatId && { chatId }),
     });
   } catch (error) {
     throw new ChatSDKError('bad_request:database', 'Failed to vote message');
@@ -327,12 +333,14 @@ export async function saveDocument({
   kind,
   content,
   userId,
+  ownerId,
 }: {
   id: string;
   title: string;
   kind: ArtifactKind;
   content: string;
   userId: string;
+  ownerId: string;
 }) {
   try {
     // Check if document with this id already exists
@@ -353,6 +361,8 @@ export async function saveDocument({
           kind,
           // Preserve existing taskIds to avoid losing pre-linked tasks
           taskIds: existingDoc.taskIds,
+          // Update ownerId if provided
+          ...(ownerId && { ownerId }),
         })
         .where(eq(document.id, id))
         .returning();
@@ -368,6 +378,7 @@ export async function saveDocument({
           userId,
           createdAt: new Date(),
           taskIds: [],
+          ownerId,
         })
         .returning();
     }
@@ -725,16 +736,51 @@ export async function updateDocumentTaskIds({
 /**
  * Safely find or create a user by email for OAuth providers
  * Handles race conditions and database constraint violations
+ * Now supports Stack Auth integration
  */
-export async function findOrCreateOAuthUser(email: string): Promise<User> {
+export async function findOrCreateOAuthUser(
+  email: string,
+  stackUserId?: string,
+): Promise<User> {
   try {
-    // First, try to find existing user
+    // First, try to find existing user by stackUserId if provided
+    if (stackUserId) {
+      const existingByStackId = await db
+        .select()
+        .from(user)
+        .where(eq(user.stackUserId, stackUserId));
+
+      if (existingByStackId.length > 0) {
+        console.log(
+          `Found existing user for Stack ID ${stackUserId} with app ID ${existingByStackId[0].id}`,
+        );
+        return existingByStackId[0];
+      }
+    }
+
+    // Try to find existing user by email
     const existingUsers = await db
       .select()
       .from(user)
       .where(eq(user.email, email));
 
     if (existingUsers.length > 0) {
+      // If we have a stackUserId, update the existing user record to link it
+      if (stackUserId) {
+        const [updatedUser] = await db
+          .update(user)
+          .set({ stackUserId })
+          .where(eq(user.email, email))
+          .returning();
+
+        if (updatedUser) {
+          console.log(
+            `Updated existing user ${updatedUser.id} with Stack ID ${stackUserId}`,
+          );
+          return updatedUser;
+        }
+      }
+
       console.log(
         `Found existing user for email ${email} with ID ${existingUsers[0].id}`,
       );
@@ -750,6 +796,7 @@ export async function findOrCreateOAuthUser(email: string): Promise<User> {
       .values({
         email,
         creditBalance: '0.00',
+        stackUserId,
       })
       .onConflictDoNothing()
       .returning();
