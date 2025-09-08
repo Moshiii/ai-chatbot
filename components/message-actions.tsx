@@ -101,6 +101,7 @@ export function PureMessageActions({
                             userId: '', // This would need to be populated from session
                             value: 'up',
                             createdAt: new Date(),
+                            ownerId: '', // Placeholder for optimistic update
                           },
                         ];
                       },
@@ -157,6 +158,7 @@ export function PureMessageActions({
                             userId: '', // This would need to be populated from session
                             value: 'down',
                             createdAt: new Date(),
+                            ownerId: '', // Placeholder for optimistic update
                           },
                         ];
                       },

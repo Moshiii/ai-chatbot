@@ -92,7 +92,7 @@ export function DocumentPreview({
   const document: Document | null = previewDocument
     ? previewDocument
     : artifact.status === 'streaming'
-      ? {
+      ?         {
           title: artifact.title,
           kind: artifact.kind,
           content: artifact.content,
@@ -100,6 +100,7 @@ export function DocumentPreview({
           createdAt: new Date(),
           userId: 'noop',
           taskIds: [],
+          ownerId: 'noop',
         }
       : null;
 

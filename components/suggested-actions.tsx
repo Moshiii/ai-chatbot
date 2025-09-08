@@ -6,8 +6,7 @@ import { memo } from 'react';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import type { VisibilityType } from './visibility-selector';
 import type { UIMessage } from 'ai';
-import { useSession } from 'next-auth/react';
-import { guestRegex } from '@/lib/constants';
+// Removed next-auth imports - using Stack Auth now
 import { useRouter } from 'next/navigation';
 
 // Constants for suggested actions
@@ -43,10 +42,10 @@ function PureSuggestedActions({
   sendMessage,
   selectedVisibilityType,
 }: SuggestedActionsProps) {
-  const { data: session } = useSession();
   const router = useRouter();
 
-  const isGuest = guestRegex.test(session?.user?.email ?? '');
+  // For now, assume authenticated users can use suggestions
+  const isGuest = false;
 
   const handleSuggestedAction = async (action: string) => {
     // Redirect guest users to login when they try to use suggestions

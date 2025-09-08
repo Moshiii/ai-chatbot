@@ -28,8 +28,7 @@ import { ArrowDown } from 'lucide-react';
 import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import type { VisibilityType } from './visibility-selector';
 import type { Attachment } from '@/lib/types';
-import { useSession } from 'next-auth/react';
-import { guestRegex } from '@/lib/constants';
+// Removed next-auth imports - using Stack Auth now
 import { useRouter } from 'next/navigation';
 
 function PureMultimodalInput({
@@ -62,10 +61,10 @@ function PureMultimodalInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { width } = useWindowSize();
-  const { data: session } = useSession();
   const router = useRouter();
 
-  const isGuest = guestRegex.test(session?.user?.email ?? '');
+  // For now, assume authenticated users can use the input
+  const isGuest = false;
   const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
 
   useEffect(() => {
