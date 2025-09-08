@@ -1,6 +1,7 @@
 import Form from 'next/form';
+import { redirect } from 'next/navigation';
 
-import { signOut } from '@/app/(auth)/auth';
+import { getCurrentAppUser } from '@/lib/stack-auth';
 
 export const SignOutForm = () => {
   return (
@@ -9,9 +10,11 @@ export const SignOutForm = () => {
       action={async () => {
         'use server';
 
-        await signOut({
-          redirectTo: '/',
-        });
+        const user = await getCurrentAppUser();
+        if (user) {
+          // Redirect to Stack Auth sign out handler
+          redirect('/api/stack/sign-out');
+        }
       }}
     >
       <button

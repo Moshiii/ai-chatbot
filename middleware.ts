@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
-import { guestRegex, isDevelopmentEnvironment } from './lib/constants';
+import { stackServerApp } from './lib/stack';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,35 +12,44 @@ export async function middleware(request: NextRequest) {
     return new Response('pong', { status: 200 });
   }
 
+  // Allow Stack Auth API routes to pass through
+  if (pathname.startsWith('/api/stack')) {
+    return NextResponse.next();
+  }
+
+  // Keep legacy auth routes for transition period
   if (pathname.startsWith('/api/auth')) {
     return NextResponse.next();
   }
 
-  const token = await getToken({
-    req: request,
-    secret: process.env.AUTH_SECRET,
-    secureCookie: !isDevelopmentEnvironment,
-  });
-
-  if (!token) {
-    const redirectUrl = encodeURIComponent(request.url);
-
-    return NextResponse.redirect(
-      new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url),
-    );
+  // Do not run auth redirects on API routes; let route handlers handle auth
+  if (pathname.startsWith('/api')) {
+    return NextResponse.next();
   }
 
-  const isGuest = guestRegex.test(token?.email ?? '');
+  let user = null;
+  try {
+    // Try to get the current Stack user (pass request so cookies are accessible in middleware)
+    user = await stackServerApp.getUser({ tokenStore: request });
+  } catch (error) {
+    // User not authenticated or other error
+    console.log('Stack auth check failed:', error);
+  }
+
+  // If no user, redirect to login for protected routes
+  if (!user) {
+    // Allow access to login page
+    if (pathname === '/login') {
+      return NextResponse.next();
+    }
+
+    // Redirect to login for other pages
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
 
   // Redirect authenticated users away from login page
-  if (token && !isGuest && pathname === '/login') {
+  if (user && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url));
-  }
-
-  // Allow guest users to access marketplace, chat, and profile pages
-  // but they will be redirected to login when trying to perform actions
-  if (isGuest && (pathname === '/marketplace' || pathname === '/profile')) {
-    return NextResponse.next();
   }
 
   return NextResponse.next();
@@ -51,7 +59,6 @@ export const config = {
   matcher: [
     '/',
     '/chat/:id',
-    '/api/:path*',
     '/login',
     '/marketplace',
     '/profile',

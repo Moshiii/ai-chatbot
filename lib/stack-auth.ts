@@ -3,9 +3,11 @@ import { stackServerApp } from './stack';
 import { findOrCreateOAuthUser } from '@/lib/db/queries';
 import type { User } from '@/lib/db/schema';
 
-export async function getCurrentStackUser() {
+export async function getCurrentStackUser(request?: Request) {
   try {
-    const user = await stackServerApp.getUser();
+    const user = await stackServerApp.getUser(
+      request ? { tokenStore: request } : undefined,
+    );
     return user;
   } catch (error) {
     console.error('Failed to get current Stack user:', error);
@@ -13,9 +15,9 @@ export async function getCurrentStackUser() {
   }
 }
 
-export async function getCurrentAppUser(): Promise<User | null> {
+export async function getCurrentAppUser(request?: Request): Promise<User | null> {
   try {
-    const stackUser = await getCurrentStackUser();
+    const stackUser = await getCurrentStackUser(request);
     if (!stackUser || !stackUser.primaryEmail) {
       return null;
     }
@@ -32,8 +34,8 @@ export async function getCurrentAppUser(): Promise<User | null> {
   }
 }
 
-export async function requireCurrentAppUser(): Promise<User> {
-  const user = await getCurrentAppUser();
+export async function requireCurrentAppUser(request?: Request): Promise<User> {
+  const user = await getCurrentAppUser(request);
   if (!user) {
     throw new Error('Authentication required');
   }

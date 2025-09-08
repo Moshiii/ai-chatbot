@@ -2,8 +2,7 @@
 
 import { ChevronUp, User as UserIcon } from 'lucide-react';
 import Image from 'next/image';
-import type { User } from 'next-auth';
-import { signOut, useSession } from 'next-auth/react';
+import type { AppUser } from '@/lib/types';
 import { useTheme } from 'next-themes';
 
 import {
@@ -22,20 +21,23 @@ import { useRouter } from 'next/navigation';
 import { toast } from './toast';
 import { LoaderIcon } from './icons';
 import { guestRegex } from '@/lib/constants';
+import { useStackApp, useUser } from '@stackframe/stack';
 
-export function SidebarUserNav({ user }: { user: User }) {
+export function SidebarUserNav({ user }: { user: AppUser }) {
   const router = useRouter();
-  const { data, status } = useSession();
   const { setTheme, resolvedTheme } = useTheme();
+  const stackApp = useStackApp();
+  const stackUser = useUser();
 
-  const isGuest = guestRegex.test(data?.user?.email ?? '');
+  // We don't have session status now; show immediate UI
+  const isGuest = guestRegex.test(user?.email ?? '');
 
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            {status === 'loading' ? (
+            {!user ? (
               <SidebarMenuButton className="data-[state=open]:bg-sidebar-accent bg-background data-[state=open]:text-sidebar-accent-foreground h-10 justify-between">
                 <div className="flex flex-row gap-2">
                   <div className="size-6 bg-zinc-500/30 rounded-full animate-pulse" />
@@ -98,22 +100,20 @@ export function SidebarUserNav({ user }: { user: User }) {
               <button
                 type="button"
                 className="w-full cursor-pointer"
-                onClick={() => {
-                  if (status === 'loading') {
+                onClick={async () => {
+                  try {
+                    if (isGuest) {
+                      router.push('/login');
+                    } else {
+                      if (stackUser) {
+                        await stackUser.signOut();
+                      }
+                      router.push('/');
+                    }
+                  } catch (error) {
                     toast({
                       type: 'error',
-                      description:
-                        'Checking authentication status, please try again!',
-                    });
-
-                    return;
-                  }
-
-                  if (isGuest) {
-                    router.push('/login');
-                  } else {
-                    signOut({
-                      redirectTo: '/',
+                      description: 'Auth action failed. Please try again.',
                     });
                   }
                 }}
