@@ -9,13 +9,12 @@ import {
   primaryKey,
   foreignKey,
   boolean,
-  serial,
-  bigint,
   jsonb,
   index,
   unique,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import { authenticatedRole, authUid, crudPolicy } from 'drizzle-orm/neon';
 
 // A2A Task Status Enum
 export const taskStatusEnum = [
@@ -38,73 +37,21 @@ export const user = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     email: varchar('email', { length: 64 }).notNull(),
     password: varchar('password', { length: 64 }),
-    creditBalance: varchar('credit_balance', { length: 20 })
+    creditBalance: varchar('creditBalance', { length: 20 })
       .notNull()
       .$default(() => '0.00'),
+    name: varchar('name', { length: 255 }),
+    image: text('image'),
+    emailVerified: timestamp('emailVerified', { mode: 'date' }),
+    stackUserId: text('stackUserId'),
   },
-  (table) => [unique('user_email_idx').on(table.email)],
+  (table) => [
+    unique('user_email_idx').on(table.email),
+    unique('user_stackUserId_idx').on(table.stackUserId),
+  ],
 );
 
 export type User = InferSelectModel<typeof user>;
-
-// NextAuth.js required tables
-export const account = pgTable(
-  'account',
-  {
-    id: serial('id'), // Remove .primaryKey() - will use composite primary key instead
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    type: varchar('type', { length: 255 }).notNull(),
-    provider: varchar('provider', { length: 255 }).notNull(),
-    providerAccountId: varchar('provider_account_id', {
-      length: 255,
-    }).notNull(),
-    refresh_token: text('refresh_token'),
-    access_token: text('access_token'),
-    expires_at: bigint('expires_at', { mode: 'number' }),
-    id_token: text('id_token'),
-    scope: text('scope'),
-    session_state: text('session_state'),
-    token_type: text('token_type'),
-  },
-  (table) => [
-    primaryKey({
-      columns: [table.provider, table.providerAccountId],
-    }),
-    index('account_user_id_idx').on(table.userId),
-  ],
-);
-
-export const session = pgTable(
-  'session',
-  {
-    id: serial('id').primaryKey(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    expires: timestamp('expires', { mode: 'date' }).notNull(),
-    sessionToken: varchar('session_token', { length: 255 }).notNull(),
-  },
-  (table) => [
-    unique('session_session_token_idx').on(table.sessionToken),
-    index('session_user_id_idx').on(table.userId),
-  ],
-);
-
-export const verification_token = pgTable(
-  'verification_token',
-  {
-    identifier: text('identifier').notNull(),
-    token: text('token').notNull(),
-    expires: timestamp('expires', { mode: 'date' }).notNull(),
-  },
-  (table) => [
-    primaryKey({
-      columns: [table.identifier, table.token],
-    }),
-  ],
-);
 
 export const chat = pgTable(
   'chat',
@@ -112,18 +59,25 @@ export const chat = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    createdAt: timestamp('created_at').notNull(),
+    createdAt: timestamp('createdAt').notNull(),
     title: text('title').notNull(),
-    userId: uuid('user_id')
+    userId: uuid('userId')
       .notNull()
       .references(() => user.id),
     visibility: varchar('visibility', { enum: ['public', 'private'] })
       .notNull()
       .$default(() => 'private'),
+    ownerId: text('ownerId').notNull(),
   },
   (table) => [
-    index('chat_user_id_idx').on(table.userId),
-    index('chat_created_at_idx').on(table.createdAt),
+    index('chat_userId_idx').on(table.userId),
+    index('chat_createdAt_idx').on(table.createdAt),
+    index('chat_ownerId_idx').on(table.ownerId),
+    crudPolicy({
+      role: authenticatedRole,
+      read: authUid(table.ownerId),
+      modify: authUid(table.ownerId),
+    }),
   ],
 );
 
@@ -135,17 +89,17 @@ export const message = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    chatId: uuid('chat_id')
+    chatId: uuid('chatId')
       .notNull()
       .references(() => chat.id),
     role: varchar('role').notNull(),
     parts: json('parts').notNull(),
     attachments: json('attachments').notNull(),
-    createdAt: timestamp('created_at').notNull(),
+    createdAt: timestamp('createdAt').notNull(),
   },
   (table) => [
-    index('message_chat_id_idx').on(table.chatId),
-    index('message_created_at_idx').on(table.createdAt),
+    index('message_chatId_idx').on(table.chatId),
+    index('message_createdAt_idx').on(table.createdAt),
   ],
 );
 
@@ -157,21 +111,28 @@ export const vote = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    messageId: uuid('message_id')
+    messageId: uuid('messageId')
       .notNull()
       .references(() => message.id),
-    userId: uuid('user_id')
+    userId: uuid('userId')
       .notNull()
       .references(() => user.id),
-    chatId: uuid('chat_id'),
+    chatId: uuid('chatId'),
     value: text('value').notNull(),
-    createdAt: timestamp('created_at')
+    createdAt: timestamp('createdAt')
       .$defaultFn(() => new Date())
       .notNull(),
+    ownerId: text('ownerId').notNull(),
   },
   (table) => [
-    index('vote_message_id_idx').on(table.messageId),
-    index('vote_user_id_idx').on(table.userId),
+    index('vote_messageId_idx').on(table.messageId),
+    index('vote_userId_idx').on(table.userId),
+    index('vote_ownerId_idx').on(table.ownerId),
+    crudPolicy({
+      role: authenticatedRole,
+      read: authUid(table.ownerId),
+      modify: authUid(table.ownerId),
+    }),
   ],
 );
 
@@ -183,7 +144,7 @@ export const document = pgTable(
     id: uuid('id')
       .notNull()
       .$defaultFn(() => crypto.randomUUID()),
-    createdAt: timestamp('created_at').notNull(),
+    createdAt: timestamp('createdAt').notNull(),
     title: text('title').notNull(),
     content: text('content'),
     kind: varchar('kind', {
@@ -191,17 +152,24 @@ export const document = pgTable(
     })
       .notNull()
       .$default(() => 'text'),
-    userId: uuid('user_id')
+    userId: uuid('userId')
       .notNull()
       .references(() => user.id),
-    taskIds: jsonb('task_ids').$type<string[]>(), // Array of task IDs linked to this document
+    taskIds: jsonb('taskIds').$type<string[]>(), // Array of task IDs linked to this document
+    ownerId: text('ownerId').notNull(),
   },
   (table) => [
     primaryKey({
       columns: [table.id, table.createdAt],
     }),
-    index('document_user_id_idx').on(table.userId),
+    index('document_userId_idx').on(table.userId),
     index('document_kind_idx').on(table.kind),
+    index('document_ownerId_idx').on(table.ownerId),
+    crudPolicy({
+      role: authenticatedRole,
+      read: authUid(table.ownerId),
+      modify: authUid(table.ownerId),
+    }),
   ],
 );
 
@@ -213,26 +181,33 @@ export const suggestion = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    documentId: uuid('document_id').notNull(),
-    documentCreatedAt: timestamp('document_created_at').notNull(),
-    originalText: text('original_text').notNull(),
-    suggestedText: text('suggested_text').notNull(),
+    documentId: uuid('documentId').notNull(),
+    documentCreatedAt: timestamp('documentCreatedAt').notNull(),
+    originalText: text('originalText').notNull(),
+    suggestedText: text('suggestedText').notNull(),
     description: text('description'),
-    isResolved: boolean('is_resolved')
+    isResolved: boolean('isResolved')
       .notNull()
       .$default(() => false),
-    userId: uuid('user_id')
+    userId: uuid('userId')
       .notNull()
       .references(() => user.id),
-    createdAt: timestamp('created_at').notNull(),
+    createdAt: timestamp('createdAt').notNull(),
+    ownerId: text('ownerId').notNull(),
   },
   (table) => [
     foreignKey({
       columns: [table.documentId, table.documentCreatedAt],
       foreignColumns: [document.id, document.createdAt],
     }),
-    index('suggestion_user_id_idx').on(table.userId),
-    index('suggestion_document_id_idx').on(table.documentId),
+    index('suggestion_userId_idx').on(table.userId),
+    index('suggestion_documentId_idx').on(table.documentId),
+    index('suggestion_ownerId_idx').on(table.ownerId),
+    crudPolicy({
+      role: authenticatedRole,
+      read: authUid(table.ownerId),
+      modify: authUid(table.ownerId),
+    }),
   ],
 );
 
@@ -244,15 +219,15 @@ export const stream = pgTable(
     id: uuid('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    chatId: uuid('chat_id').notNull(),
-    createdAt: timestamp('created_at').notNull(),
+    chatId: uuid('chatId').notNull(),
+    createdAt: timestamp('createdAt').notNull(),
   },
   (table) => [
     foreignKey({
       columns: [table.chatId],
       foreignColumns: [chat.id],
     }),
-    index('stream_chat_id_idx').on(table.chatId),
+    index('stream_chatId_idx').on(table.chatId),
   ],
 );
 
@@ -263,22 +238,22 @@ export const task = pgTable(
   'task',
   {
     id: text('id').primaryKey(), // Task ID from A2A Task.id
-    contextId: text('context_id').notNull(),
+    contextId: text('contextId').notNull(),
     status: varchar('status', { enum: taskStatusEnum })
       .notNull()
       .$default(() => 'submitted'),
-    statusMessage: text('status_message'),
+    statusMessage: text('statusMessage'),
     result: jsonb('result'),
-    webhookToken: text('webhook_token').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true })
+    webhookToken: text('webhookToken').notNull(),
+    createdAt: timestamp('createdAt', { withTimezone: true })
       .$defaultFn(() => new Date())
       .notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
+    updatedAt: timestamp('updatedAt', { withTimezone: true })
       .$defaultFn(() => new Date())
       .notNull(),
   },
   (table) => [
-    index('task_context_id_idx').on(table.contextId),
+    index('task_contextId_idx').on(table.contextId),
     index('task_status_idx').on(table.status),
   ],
 );
@@ -287,26 +262,10 @@ export type Task = InferSelectModel<typeof task>;
 
 // Relations
 export const userRelations = relations(user, ({ many }) => ({
-  accounts: many(account),
-  sessions: many(session),
   chats: many(chat),
   votes: many(vote),
   documents: many(document),
   suggestions: many(suggestion),
-}));
-
-export const accountRelations = relations(account, ({ one }) => ({
-  user: one(user, {
-    fields: [account.userId],
-    references: [user.id],
-  }),
-}));
-
-export const sessionRelations = relations(session, ({ one }) => ({
-  user: one(user, {
-    fields: [session.userId],
-    references: [user.id],
-  }),
 }));
 
 export const chatRelations = relations(chat, ({ one, many }) => ({
