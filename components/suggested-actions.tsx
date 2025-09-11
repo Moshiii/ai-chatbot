@@ -15,19 +15,18 @@ const SUGGESTED_ACTIONS = [
     title: 'Analyze market trends',
     label: 'for renewable energy stocks',
     action:
-      'Analyze current market trends and provide a detailed report on renewable energy stocks, including performance metrics and investment insights. Use our agent tool to break this down into comprehensive market analysis tasks.',
+      'Analyze current market trends and provide a detailed report on renewable energy stocks, including performance metrics and investment insights.',
   },
   {
     title: 'Find trending topics',
     label: 'on social media today',
     action:
-      'Search for and analyze the top trending topics on social media platforms today. Use our agent tool to organize this into structured trend analysis.',
+      'Search for and analyze the top trending topics on social media platforms today.',
   },
   {
     title: 'Plan a complex project',
     label: 'with task decomposition',
-    action:
-      'Help me plan a comprehensive software development project. Use our agent tool to intelligently break this down into specific, actionable tasks with appropriate agent assignments.',
+    action: 'Help me plan a comprehensive software development project.',
   },
 ] as const;
 
