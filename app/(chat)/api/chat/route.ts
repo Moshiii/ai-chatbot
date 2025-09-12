@@ -3,7 +3,6 @@ import {
   createUIMessageStream,
   JsonToSseTransformStream,
   smoothStream,
-  stepCountIs,
   streamText,
 } from 'ai';
 import { requireCurrentAppUser } from '@/lib/stack-auth';
@@ -25,7 +24,7 @@ import { createDocument } from '@/lib/ai/tools/create-document';
 import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
-import { requestA2AAgent } from '@/lib/ai/tools/request-a2a-agent';
+import { getMcpTools } from '@/lib/mcp/client';
 
 import { isProductionEnvironment } from '@/lib/constants';
 import { myProvider } from '@/lib/ai/providers';
@@ -164,22 +163,32 @@ export async function POST(request: Request) {
     );
 
     const stream = createUIMessageStream({
-      execute: ({ writer: dataStream }) => {
+      execute: async ({ writer: dataStream }) => {
+        // Fetch MCP tools dynamically
+        const mcpTools = await getMcpTools({ session, dataStream });
+        const mcpToolNames = Object.keys(mcpTools);
+
+        // Define active tools based on chat model
+        const activeTools: string[] =
+          selectedChatModel === 'chat-model-reasoning'
+            ? []
+            : [
+                'getWeather',
+                'createDocument', // Keep for non-task workflows
+                'updateDocument',
+                'requestSuggestions',
+                // 'requestA2AAgent',
+                // 'finantialA2AAgent',
+                // 'tripPlannerAgent',
+                // Integrated tool for A2A agent communication + task management
+                ...mcpToolNames, // Add MCP tool names to active tools
+              ];
+
         const result = streamText({
           model: modelProvider,
           system: systemPrompt({ selectedChatModel, requestHints }),
+          experimental_activeTools: activeTools as any,
           messages: convertToModelMessages(uiMessages),
-          stopWhen: stepCountIs(5),
-          experimental_activeTools:
-            selectedChatModel === 'chat-model-reasoning'
-              ? [] // No tools for reasoning mode
-              : [
-                  'getWeather',
-                  'createDocument', // Keep for non-task workflows
-                  'updateDocument',
-                  'requestSuggestions',
-                  'requestA2AAgent', // Integrated tool for A2A agent communication + task management
-                ],
           experimental_transform: smoothStream({ chunking: 'word' }),
           tools:
             selectedChatModel === 'chat-model-reasoning'
@@ -192,7 +201,8 @@ export async function POST(request: Request) {
                     session,
                     dataStream,
                   }),
-                  requestA2AAgent: requestA2AAgent({ session, dataStream }), // Integrated A2A communication + task management tool
+                  // requestA2AAgent: requestA2AAgent({ session, dataStream }), // Integrated A2A communication + task management tool
+                  ...mcpTools, // Merge MCP tools
                 },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
@@ -205,8 +215,11 @@ export async function POST(request: Request) {
           {
             modelProvider: modelProvider?.modelId || 'unknown',
             toolsDisabled: selectedChatModel === 'chat-model-reasoning',
-            activeToolsCount:
+            activeToolsCount: activeTools.length,
+            nativeToolsCount:
               selectedChatModel === 'chat-model-reasoning' ? 0 : 5,
+            mcpToolsCount: mcpToolNames.length,
+            mcpToolNames: mcpToolNames,
             toolsObject:
               selectedChatModel === 'chat-model-reasoning'
                 ? 'empty'
@@ -216,18 +229,21 @@ export async function POST(request: Request) {
           },
         );
 
-        result.consumeStream();
-
         console.log(
           '[Chat API] 🔄 Merging result stream with UI message stream',
         );
+
+        // Simply merge the streams and let them complete naturally
         dataStream.merge(
           result.toUIMessageStream({
             sendReasoning: true,
-            originalMessages: uiMessages, // Required for AI SDK v5 proper artifact creation
+            originalMessages: uiMessages,
           }),
         );
-        console.log('[Chat API] ✅ Stream merge completed');
+
+        console.log(
+          '[Chat API] ✅ Stream merge initiated - processing will continue in background',
+        );
       },
       generateId: () => chatIds.generateMessageId().databaseId,
       onFinish: async ({ messages }) => {
