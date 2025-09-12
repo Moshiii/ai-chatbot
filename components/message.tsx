@@ -388,6 +388,151 @@ const PurePreviewMessage = ({
                   );
                 }
               }
+
+              // Generic handler for MCP and other unknown tool calls
+              if (type.startsWith('tool-')) {
+                const { toolCallId, state } = part;
+                const toolName = type.replace('tool-', '').replace(/_/g, ' ');
+
+                if (state === 'input-available') {
+                  return (
+                    <div key={`generic-input-${toolCallId}`}>
+                      <div className="bg-card text-card-foreground ring-1 ring-border shadow-sm rounded-xl p-4 w-fit max-w-2xl">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="size-4 bg-blue-500 rounded shadow-sm animate-pulse" />
+                          <span className="text-sm font-medium tracking-tight">
+                            Consulting {toolName}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Processing your request...
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (state === 'output-available') {
+                  const { output } = part;
+
+                  // Defensive check: output may be string or structured object
+                  if (
+                    output &&
+                    typeof output === 'object' &&
+                    !Array.isArray(output) &&
+                    'error' in (output as Record<string, unknown>)
+                  ) {
+                    return (
+                      <div
+                        key={`generic-error-${toolCallId}`}
+                        className="text-red-500 p-2 border rounded"
+                      >
+                        Error from {toolName}: {String((output as any).error)}
+                      </div>
+                    );
+                  }
+
+                  // Handle string output (most common for MCP agents)
+                  if (typeof output === 'string') {
+                    // If output is a JSON string from MCP, try to extract text parts
+                    let rendered = output;
+                    try {
+                      const maybe = JSON.parse(output);
+                      if (
+                        maybe &&
+                        typeof maybe === 'object' &&
+                        'result' in maybe &&
+                        maybe.result &&
+                        typeof maybe.result === 'object' &&
+                        'parts' in maybe.result &&
+                        Array.isArray((maybe.result as any).parts)
+                      ) {
+                        const parts = (maybe.result as any).parts as Array<any>;
+                        const text = parts
+                          .filter((p) => p && (p.text || p.content || p.value))
+                          .map((p) => p.text || p.content || p.value)
+                          .join('\n\n');
+                        if (text && typeof text === 'string') {
+                          rendered = text;
+                        }
+                      }
+                    } catch {
+                      // not JSON; render as-is
+                    }
+                    return (
+                      <div key={`generic-output-${toolCallId}`}>
+                        <div className="bg-card text-card-foreground ring-1 ring-border shadow-sm rounded-xl p-5">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="size-4 bg-green-500 rounded" />
+                            <span className="text-sm font-medium tracking-tight">
+                              {toolName} Response
+                            </span>
+                          </div>
+                          <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
+                            <Markdown>{rendered}</Markdown>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Handle object/array output
+                  if (typeof output === 'object' && output !== null) {
+                    // Prefer text or content fields when present
+                    const text =
+                      (output as any)?.text || (output as any)?.content;
+                    if (typeof text === 'string') {
+                      return (
+                        <div key={`generic-output-${toolCallId}`}>
+                          <div className="bg-card text-card-foreground ring-1 ring-border shadow-sm rounded-xl p-5">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="size-4 bg-green-500 rounded" />
+                              <span className="text-sm font-medium tracking-tight">
+                                {toolName} Response
+                              </span>
+                            </div>
+                            <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
+                              <Markdown>{text}</Markdown>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={`generic-output-${toolCallId}`}>
+                        <div className="bg-card text-card-foreground ring-1 ring-border shadow-sm rounded-xl p-5">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="size-4 bg-green-500 rounded" />
+                            <span className="text-sm font-medium tracking-tight">
+                              {toolName} Response
+                            </span>
+                          </div>
+                          <pre className="text-[13px] text-foreground bg-muted/60 ring-1 ring-border/60 p-3 rounded overflow-auto max-h-96">
+                            {JSON.stringify(output, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Fallback for other types
+                  return (
+                    <div key={`generic-output-${toolCallId}`}>
+                      <div className="bg-card text-card-foreground ring-1 ring-border shadow-sm rounded-xl p-5">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="size-4 bg-green-500 rounded" />
+                          <span className="text-sm font-medium tracking-tight">
+                            {toolName} Response
+                          </span>
+                        </div>
+                        <p className="text-sm text-foreground">
+                          {String(output)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+              }
             })}
 
             {/* Canvas preview for messages that reference canvas documents */}
