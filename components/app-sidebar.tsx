@@ -2,6 +2,7 @@
 
 import type { AppUser } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import { Suspense } from 'react';
 
 import { PlusIcon } from '@/components/icons';
 import { SidebarHistory } from '@/components/sidebar-history';
@@ -61,7 +62,11 @@ export function AppSidebar({ user }: { user: AppUser | undefined }) {
       <SidebarContent>
         <SidebarHistory user={user} />
       </SidebarContent>
-      <SidebarFooter>{user && <SidebarUserNav user={user} />}</SidebarFooter>
+      <SidebarFooter>
+        <Suspense fallback={<div className="flex items-center justify-center p-2"><div className="text-sm text-muted-foreground">Loading user...</div></div>}>
+          {user && <SidebarUserNav user={user} />}
+        </Suspense>
+      </SidebarFooter>
     </Sidebar>
   );
 }
