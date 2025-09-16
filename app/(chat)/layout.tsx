@@ -5,6 +5,8 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { getCurrentAppUser } from '@/lib/stack-auth';
 import Script from 'next/script';
 import { DataStreamProvider } from '@/components/data-stream-provider';
+import { Suspense } from 'react';
+import Loading from './loading';
 
 export const experimental_ppr = true;
 
@@ -36,7 +38,9 @@ export default async function Layout({
       />
       <DataStreamProvider>
         <SidebarProvider defaultOpen={!isCollapsed}>
-          <AppSidebar user={normalizedUser} />
+          <Suspense fallback={<Loading />}>
+            <AppSidebar user={normalizedUser} />
+          </Suspense>
           <SidebarInset>{children}</SidebarInset>
         </SidebarProvider>
       </DataStreamProvider>
