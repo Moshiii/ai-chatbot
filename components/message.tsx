@@ -1,7 +1,7 @@
 'use client';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
-import { memo, useState } from 'react';
+import { memo, useState, useEffect } from 'react';
 import type { Vote } from '@/lib/db/schema';
 import { DocumentToolCall, DocumentToolResult } from './document';
 import { PencilEditIcon, SparklesIcon } from './icons';
@@ -49,6 +49,22 @@ const PurePreviewMessage = ({
   );
 
   useDataStream();
+
+  const messages = ['Thinking...', 'Connecting ISEK ...','Finding Agents on ERC-8004...', 'Consulting...',];
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentMessageIndex((prevIndex) => {
+        if (messages[prevIndex] === 'Consulting...') {
+          clearInterval(interval);
+          return prevIndex;
+        }
+        return (prevIndex + 1) % messages.length;
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <AnimatePresence>
@@ -401,7 +417,7 @@ const PurePreviewMessage = ({
                         <div className="flex items-center gap-2 mb-2">
                           <div className="size-4 bg-blue-500 rounded shadow-sm animate-pulse" />
                           <span className="text-sm font-medium tracking-tight">
-                            Consulting {toolName}
+                            {messages[currentMessageIndex]}{messages[currentMessageIndex] === 'Consulting...' && ` ${toolName}`}
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground">
