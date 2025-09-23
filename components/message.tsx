@@ -50,7 +50,7 @@ const PurePreviewMessage = ({
 
   useDataStream();
 
-  const messages = ['Thinking...', 'Connecting ISEK ...','Finding Agents on ERC-8004...', 'Consulting...',];
+  const messages = ['Thinking...', 'Connecting ISEK ...','Recruiting Agent on ERC-8004 Registry', 'Consulting...',];
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
 
   useEffect(() => {
