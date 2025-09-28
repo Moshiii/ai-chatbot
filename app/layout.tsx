@@ -7,9 +7,9 @@ import { StackProvider } from '@/components/stack-provider';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://chat.vercel.ai'),
-  title: 'Next.js Chatbot Template',
-  description: 'Next.js chatbot template using the AI SDK.',
+  metadataBase: new URL('https://isekbot.vercel.app/'),
+  title: 'ISEK Network Chatbot',
+  description: 'Chatbot with the ability to query the entire ISEK network',
 };
 
 export const viewport = {
