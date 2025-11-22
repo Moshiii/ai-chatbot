@@ -36,14 +36,16 @@ import {
   saveChat,
   saveMessages,
   updateChatLastContextById,
+  updateChatTitleById,
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
-import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import { convertToUIMessages, generateUUID, getTextFromMessage } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
+import { experimental_createMCPClient as createMCPClient } from '@ai-sdk/mcp';
 
 export const maxDuration = 60;
 
@@ -86,11 +88,24 @@ export function getStreamContext() {
 }
 
 export async function POST(request: Request) {
+  const startTime = performance.now();
+  const timings: Record<string, number> = {};
+  let lastTime = startTime;
+
+  const logTiming = (label: string) => {
+    const now = performance.now();
+    const elapsed = now - lastTime;
+    timings[label] = elapsed;
+    console.log(`[TIMING] ${label}: ${elapsed.toFixed(2)}ms`);
+    lastTime = now;
+  };
+
   let requestBody: PostRequestBody;
 
   try {
     const json = await request.json();
     requestBody = postRequestBodySchema.parse(json);
+    logTiming("1. Request parsing");
   } catch (_) {
     return new ChatSDKError("bad_request:api").toResponse();
   }
@@ -109,6 +124,7 @@ export async function POST(request: Request) {
     } = requestBody;
 
     const session = await auth();
+    logTiming("2. Authentication");
 
     if (!session?.user) {
       return new ChatSDKError("unauthorized:chat").toResponse();
@@ -120,12 +136,14 @@ export async function POST(request: Request) {
       id: session.user.id,
       differenceInHours: 24,
     });
+    logTiming("3. Message count check");
 
     if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
       return new ChatSDKError("rate_limit:chat").toResponse();
     }
 
     const chat = await getChatById({ id });
+    logTiming("4. Chat lookup");
     let messagesFromDb: DBMessage[] = [];
 
     if (chat) {
@@ -134,10 +152,12 @@ export async function POST(request: Request) {
       }
       // Only fetch messages if chat already exists
       messagesFromDb = await getMessagesByChatId({ id });
+      logTiming("5. Fetch messages from DB");
     } else {
       const title = await generateTitleFromUserMessage({
         message,
       });
+      logTiming("5. Generate title (new chat)");
 
       await saveChat({
         id,
@@ -145,12 +165,15 @@ export async function POST(request: Request) {
         title,
         visibility: selectedVisibilityType,
       });
+      logTiming("6. Save new chat");
       // New chat - no need to fetch messages, it's empty
     }
 
     const uiMessages = [...convertToUIMessages(messagesFromDb), message];
+    logTiming("7. Convert to UI messages");
 
     const { longitude, latitude, city, country } = geolocation(request);
+    logTiming("8. Geolocation");
 
     const requestHints: RequestHints = {
       longitude,
@@ -171,14 +194,59 @@ export async function POST(request: Request) {
         },
       ],
     });
+    logTiming("9. Save user message");
 
     const streamId = generateUUID();
     await createStreamId({ streamId, chatId: id });
+    logTiming("10. Create stream ID");
 
     let finalMergedUsage: AppUsage | undefined;
 
+    console.log("[TIMING] Starting MCP client creation...");
+    let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | null = null;
+    let mcp_tools: Record<string, unknown> = {};
+    
+    try {
+      // Add timeout to MCP client creation to prevent blocking
+      const mcpClientPromise = createMCPClient({
+        transport: {
+          type: 'http',
+          url: 'http://127.0.0.1:8000/mcp',
+
+          // optional: configure HTTP headers
+          // headers: { Authorization: 'Bearer my-api-key' },
+
+          // optional: provide an OAuth client provider for automatic authorization
+          // authProvider: myOAuthClientProvider,
+        },
+      });
+      
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("MCP client creation timeout")), 5000); // 5 second timeout
+      });
+      
+      mcpClient = await Promise.race([mcpClientPromise, timeoutPromise]);
+      logTiming("11. Create MCP client");
+      
+      console.log("[TIMING] Fetching MCP tools...");
+      const toolsPromise = mcpClient.tools();
+      const toolsTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("MCP tools fetch timeout")), 5000); // 5 second timeout
+      });
+      
+      mcp_tools = await Promise.race([toolsPromise, toolsTimeoutPromise]);
+      logTiming("12. Fetch MCP tools");
+    } catch (err) {
+      console.warn("[TIMING] MCP client creation/tools fetch failed or timed out:", err);
+      logTiming("11-12. MCP client (failed/timeout)");
+      // Continue without MCP tools - the stream will work without them
+    }
+    
+    console.log("[TIMING] Creating stream...");
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
+        console.log("[TIMING] Stream execute started");
+        const streamTextStart = performance.now();
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
@@ -188,26 +256,26 @@ export async function POST(request: Request) {
             selectedChatModel === "chat-model-reasoning"
               ? []
               : [
-                  "getWeather",
-                  "createDocument",
-                  "updateDocument",
                   "requestSuggestions",
                 ],
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
-            getWeather,
-            createDocument: createDocument({ session, dataStream }),
-            updateDocument: updateDocument({ session, dataStream }),
+            // getWeather,
+            // createDocument: createDocument({ session, dataStream }),
+            // updateDocument: updateDocument({ session, dataStream }),
             requestSuggestions: requestSuggestions({
               session,
               dataStream,
             }),
+            ...mcp_tools,
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
             functionId: "stream-text",
           },
           onFinish: async ({ usage }) => {
+            const onFinishStart = performance.now();
+            console.log("[TIMING] onFinish callback started");
             try {
               const providers = await getTokenlensCatalog();
               const modelId =
@@ -229,10 +297,13 @@ export async function POST(request: Request) {
                 });
                 return;
               }
-
+              if (mcpClient) {
+                await mcpClient.close();
+              }
               const summary = getUsage({ modelId, usage, providers });
               finalMergedUsage = { ...usage, ...summary, modelId } as AppUsage;
               dataStream.write({ type: "data-usage", data: finalMergedUsage });
+              console.log(`[TIMING] onFinish completed: ${(performance.now() - onFinishStart).toFixed(2)}ms`);
             } catch (err) {
               console.warn("TokenLens enrichment failed", err);
               finalMergedUsage = usage;
@@ -240,6 +311,9 @@ export async function POST(request: Request) {
             }
           },
         });
+
+        const streamTextElapsed = performance.now() - streamTextStart;
+        console.log(`[TIMING] streamText() call completed: ${streamTextElapsed.toFixed(2)}ms`);
 
         result.consumeStream();
 
@@ -251,6 +325,8 @@ export async function POST(request: Request) {
       },
       generateId: generateUUID,
       onFinish: async ({ messages }) => {
+        const streamOnFinishStart = performance.now();
+        console.log("[TIMING] Stream onFinish callback started");
         await saveMessages({
           messages: messages.map((currentMessage) => ({
             id: currentMessage.id,
@@ -261,6 +337,7 @@ export async function POST(request: Request) {
             chatId: id,
           })),
         });
+        console.log(`[TIMING] Save assistant messages: ${(performance.now() - streamOnFinishStart).toFixed(2)}ms`);
 
         if (finalMergedUsage) {
           try {
@@ -268,6 +345,7 @@ export async function POST(request: Request) {
               chatId: id,
               context: finalMergedUsage,
             });
+            console.log(`[TIMING] Update chat context: ${(performance.now() - streamOnFinishStart).toFixed(2)}ms`);
           } catch (err) {
             console.warn("Unable to persist last usage for chat", id, err);
           }
@@ -277,6 +355,7 @@ export async function POST(request: Request) {
         return "Oops, an error occurred!";
       },
     });
+    logTiming("13. Create UI message stream");
 
     // const streamContext = getStreamContext();
 
@@ -287,6 +366,16 @@ export async function POST(request: Request) {
     //     )
     //   );
     // }
+
+    const totalTime = performance.now() - startTime;
+    console.log("\n[TIMING SUMMARY]");
+    console.log("==================");
+    Object.entries(timings).forEach(([label, time]) => {
+      const percentage = ((time / totalTime) * 100).toFixed(1);
+      console.log(`${label}: ${time.toFixed(2)}ms (${percentage}%)`);
+    });
+    console.log(`TOTAL TIME BEFORE STREAM: ${totalTime.toFixed(2)}ms`);
+    console.log("==================\n");
 
     return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
   } catch (error) {

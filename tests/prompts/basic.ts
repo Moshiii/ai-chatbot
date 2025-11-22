@@ -1,148 +1,20 @@
 import type { ModelMessage } from "ai";
 
 export const TEST_PROMPTS: Record<string, ModelMessage> = {
-  USER_SKY: {
+  USER_ANP_INTRO: {
     role: "user",
-    content: [{ type: "text", text: "Why is the sky blue?" }],
+    content: [{ type: "text", text: "What is the Agent Network Protocol (ANP)?" }],
   },
-  USER_GRASS: {
+  USER_ANP_BENEFITS: {
     role: "user",
-    content: [{ type: "text", text: "Why is grass green?" }],
+    content: [{ type: "text", text: "How does ANP benefit intelligent agent networks?" }],
   },
-  USER_THANKS: {
+  USER_ANP_USE_CASES: {
     role: "user",
-    content: [{ type: "text", text: "Thanks!" }],
+    content: [{ type: "text", text: "What are some practical use cases of ANP?" }],
   },
-  USER_NEXTJS: {
+  USER_ANP_SECURITY: {
     role: "user",
-    content: [
-      { type: "text", text: "What are the advantages of using Next.js?" },
-    ],
-  },
-  USER_IMAGE_ATTACHMENT: {
-    role: "user",
-    content: [
-      {
-        type: "file",
-        mediaType: "...",
-        data: "...",
-      },
-      {
-        type: "text",
-        text: "Who painted this?",
-      },
-    ],
-  },
-  USER_TEXT_ARTIFACT: {
-    role: "user",
-    content: [
-      {
-        type: "text",
-        text: "Help me write an essay about Silicon Valley",
-      },
-    ],
-  },
-  CREATE_DOCUMENT_TEXT_CALL: {
-    role: "user",
-    content: [
-      {
-        type: "text",
-        text: "Essay about Silicon Valley",
-      },
-    ],
-  },
-  CREATE_DOCUMENT_TEXT_RESULT: {
-    role: "tool",
-    content: [
-      {
-        type: "tool-result",
-        toolCallId: "call_123",
-        toolName: "createDocument",
-        output: {
-          type: "json",
-          value: {
-            id: "3ca386a4-40c6-4630-8ed1-84cbd46cc7eb",
-            title: "Essay about Silicon Valley",
-            kind: "text",
-            content: "A document was created and is now visible to the user.",
-          },
-        },
-      },
-    ],
-  },
-  GET_WEATHER_CALL: {
-    role: "user",
-    content: [
-      {
-        type: "text",
-        text: "What's the weather in sf?",
-      },
-    ],
-  },
-  GET_WEATHER_RESULT: {
-    role: "tool",
-    content: [
-      {
-        type: "tool-result",
-        toolCallId: "call_456",
-        toolName: "getWeather",
-        output: {
-          type: "json",
-          value: {
-            latitude: 37.763_283,
-            longitude: -122.412_86,
-            generationtime_ms: 0.064_492_225_646_972_66,
-            utc_offset_seconds: -25_200,
-            timezone: "America/Los_Angeles",
-            timezone_abbreviation: "GMT-7",
-            elevation: 18,
-            current_units: {
-              time: "iso8601",
-              interval: "seconds",
-              temperature_2m: "°C",
-            },
-            current: {
-              time: "2025-03-10T14:00",
-              interval: 900,
-              temperature_2m: 17,
-            },
-            daily_units: {
-              time: "iso8601",
-              sunrise: "iso8601",
-              sunset: "iso8601",
-            },
-            daily: {
-              time: [
-                "2025-03-10",
-                "2025-03-11",
-                "2025-03-12",
-                "2025-03-13",
-                "2025-03-14",
-                "2025-03-15",
-                "2025-03-16",
-              ],
-              sunrise: [
-                "2025-03-10T07:27",
-                "2025-03-11T07:25",
-                "2025-03-12T07:24",
-                "2025-03-13T07:22",
-                "2025-03-14T07:21",
-                "2025-03-15T07:19",
-                "2025-03-16T07:18",
-              ],
-              sunset: [
-                "2025-03-10T19:12",
-                "2025-03-11T19:13",
-                "2025-03-12T19:14",
-                "2025-03-13T19:15",
-                "2025-03-14T19:16",
-                "2025-03-15T19:17",
-                "2025-03-16T19:17",
-              ],
-            },
-          },
-        },
-      },
-    ],
+    content: [{ type: "text", text: "How does ANP ensure secure communication between agents?" }],
   },
 };
